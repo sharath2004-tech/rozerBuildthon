@@ -1,6 +1,6 @@
 # Evaluation
 
-_Generated 2026-09-01 18:03 — n=8,000 synthetic failed payments, seed=7._
+_Generated 2026-09-01 18:07 — n=8,000 synthetic failed payments, seed=7._
 
 ## Why there is a holdout
 
