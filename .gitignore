@@ -1,0 +1,41 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---- Virtual environments (never commit these) ----
+venv/
+.venv/
+env/
+ENV/
+
+# ---- Secrets ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---- Databases / local artifacts ----
+*.db
+*.sqlite
+*.sqlite3
+data/*.db
+eval_out/
+
+# ---- Node / frontend ----
+node_modules/
+dist/
+build/
+.vite/
+
+# ---- Editors / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp

@@ -1,0 +1,27 @@
+# ---- Core API ----
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+
+# ---- Agent orchestration ----
+langgraph==0.2.60
+
+# ---- LLM provider (single provider + deterministic fallback by design) ----
+google-generativeai==0.8.3
+
+# ---- Persistence ----
+SQLAlchemy==2.0.36
+
+# ---- Dashboard ----
+streamlit==1.41.1
+pandas==2.2.3
+
+# ---- Razorpay ----
+razorpay==1.4.2
+
+# ---- Config ----
+python-dotenv==1.0.1
+
+# ---- Testing ----
+pytest==8.3.4
+httpx==0.28.1
