@@ -1,23 +1,23 @@
 # Minimal requirements - all with pre-built wheels
-fastapi==0.104.1
-uvicorn==0.24.0
-pydantic==2.4.2
-pydantic-core==2.10.1
-annotated-types==0.6.0
-typing-extensions==4.8.0
+fastapi
+uvicorn
+pydantic
+pydantic-core
+annotated-types
+typing-extensions
 
 # Database
-SQLAlchemy==2.0.23
-psycopg2-binary==2.9.9
+SQLAlchemy
+psycopg2-binary
 
 # Razorpay
-razorpay==1.4.1
-requests==2.31.0
+razorpay
+requests
 
 # Config
-python-dotenv==1.0.0
+python-dotenv
 
 # Optional - only if needed
-httpx==0.25.1
-anyio==4.0.0
-starlette==0.27.0
+httpx
+anyio
+starlette
