@@ -9,11 +9,12 @@ from typing import Optional
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
-GROQ_MODEL = "llama-3.3-70b-versatile"  # Fast and accurate
+GROQ_MODEL = "llama3-70b-8192"  # Available model on Groq
 
 # Debug: Print on startup
 if GROQ_API_KEY:
     print(f"✅ Groq API key loaded: {GROQ_API_KEY[:15]}...")
+    print(f"📦 Using Groq model: {GROQ_MODEL}")
 else:
     print("⚠️ GROQ_API_KEY not found in environment")
 
