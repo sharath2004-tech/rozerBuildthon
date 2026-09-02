@@ -1,27 +1,23 @@
-# ---- Core API ----
-fastapi==0.109.0
-uvicorn==0.27.0
-pydantic==2.5.3
-pydantic-core==2.14.6
+# Minimal requirements - all with pre-built wheels
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic==2.4.2
+pydantic-core==2.10.1
+annotated-types==0.6.0
+typing-extensions==4.8.0
 
-# ---- Agent orchestration ----
-langgraph==0.0.26
-langchain-core==0.1.23
-langchain==0.1.8
-
-# ---- LLM provider ----
-google-generativeai==0.3.2
-
-# ---- Persistence (PostgreSQL) ----
-SQLAlchemy==2.0.25
+# Database
+SQLAlchemy==2.0.23
 psycopg2-binary==2.9.9
 
-# ---- Razorpay ----
-razorpay==1.4.2
+# Razorpay
+razorpay==1.4.1
+requests==2.31.0
 
-# ---- Config ----
-python-dotenv==1.0.1
+# Config
+python-dotenv==1.0.0
 
-# ---- Testing (optional) ----
-pytest==8.0.0
-httpx==0.26.0
+# Optional - only if needed
+httpx==0.25.1
+anyio==4.0.0
+starlette==0.27.0
