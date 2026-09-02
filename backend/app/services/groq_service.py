@@ -9,7 +9,7 @@ from typing import Optional
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
-GROQ_MODEL = "llama-3.3-70b-versatile"  # Production model
+GROQ_MODEL = "openai/gpt-oss-20b""  # Production model
 
 # Debug: Print on startup
 if GROQ_API_KEY:
