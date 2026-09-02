@@ -43,6 +43,9 @@ class SystemHealthChecker:
                 "timestamp": datetime.now().isoformat()
             }
         
+        # Log key format for debugging
+        print(f"🔑 Testing Groq with key: {self.groq_api_key[:20]}... (length: {len(self.groq_api_key)})")
+        
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.post(
@@ -64,6 +67,8 @@ class SystemHealthChecker:
                     }
                 )
                 
+                print(f"📡 Groq API response: {response.status_code}")
+                
                 if response.status_code == 200:
                     data = response.json()
                     reply = data["choices"][0]["message"]["content"]
@@ -77,15 +82,19 @@ class SystemHealthChecker:
                         "timestamp": datetime.now().isoformat()
                     }
                 else:
+                    error_text = response.text
+                    print(f"❌ Groq error body: {error_text}")
                     return {
                         "status": "failed",
                         "message": f"Groq API error: {response.status_code}",
                         "connected": False,
                         "error_code": response.status_code,
+                        "error_detail": error_text[:200],
                         "timestamp": datetime.now().isoformat()
                     }
                     
         except Exception as e:
+            print(f"❌ Groq exception: {type(e).__name__}: {str(e)}")
             return {
                 "status": "failed",
                 "message": f"Groq API connection error: {str(e)}",
@@ -107,6 +116,9 @@ class SystemHealthChecker:
                 "timestamp": datetime.now().isoformat()
             }
         
+        # Log key format for debugging
+        print(f"🔑 Testing Razorpay with key_id: {self.razorpay_key_id}")
+        
         try:
             # Test with a safe read-only request - fetch payment methods
             async with httpx.AsyncClient(timeout=10.0) as client:
@@ -114,6 +126,8 @@ class SystemHealthChecker:
                     "https://api.razorpay.com/v1/methods",
                     auth=(self.razorpay_key_id, self.razorpay_key_secret)
                 )
+                
+                print(f"📡 Razorpay API response: {response.status_code}")
                 
                 if response.status_code == 200:
                     data = response.json()
@@ -127,15 +141,19 @@ class SystemHealthChecker:
                         "timestamp": datetime.now().isoformat()
                     }
                 else:
+                    error_text = response.text
+                    print(f"❌ Razorpay error body: {error_text}")
                     return {
                         "status": "failed",
                         "message": f"Razorpay API error: {response.status_code}",
                         "connected": False,
                         "error_code": response.status_code,
+                        "error_detail": error_text[:200],
                         "timestamp": datetime.now().isoformat()
                     }
                     
         except Exception as e:
+            print(f"❌ Razorpay exception: {type(e).__name__}: {str(e)}")
             return {
                 "status": "failed",
                 "message": f"Razorpay API connection error: {str(e)}",
