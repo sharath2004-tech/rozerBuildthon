@@ -533,7 +533,7 @@ async def get_ai_recommendation(event: PaymentEvent):
             "payment_id": event.payment_id,
             "ai_recommendation": recommendation,
             "provider": "Groq",
-            "model": "llama-3.3-70b-versatile"
+            "model": "lopenai/gpt-oss-20b"
         }
     else:
         return {
@@ -550,13 +550,9 @@ def get_services_status():
     import os
     # Import inside function to avoid circular/missing dependencies
     from app.db import health_check
+    from app.services.razorpay_service import get_status as razorpay_status
     
     db_status = health_check()
-    
-    # Check Razorpay without importing the module
-    razorpay_key_id = os.getenv("RAZORPAY_KEY_ID", "")
-    razorpay_secret = os.getenv("RAZORPAY_KEY_SECRET", "")
-    razorpay_configured = bool(razorpay_key_id and razorpay_secret)
     
     # Check Groq
     groq_key = os.getenv("GROQ_API_KEY", "")
@@ -565,15 +561,10 @@ def get_services_status():
     return {
         "services": {
             "database": db_status,
-            "razorpay": {
-                "configured": razorpay_configured,
-                "status": "active" if razorpay_configured else "not_configured",
-                "key_id_preview": razorpay_key_id[:15] + "..." if razorpay_key_id else "NOT_SET",
-                "secret_preview": razorpay_secret[:10] + "..." if razorpay_secret else "NOT_SET"
-            },
+            "razorpay": razorpay_status(),
             "groq_ai": {
                 "provider": "Groq",
-                "model": "llama-3.3-70b-versatile",
+                "model": "openai/gpt-oss-20b",
                 "configured": groq_configured,
                 "status": "active" if groq_configured else "not_configured",
                 "key_preview": groq_key[:15] + "..." if groq_key else "NOT_SET"

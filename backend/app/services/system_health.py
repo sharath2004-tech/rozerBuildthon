@@ -106,9 +106,11 @@ class SystemHealthChecker:
         """
         Test Razorpay API connectivity.
         
-        Makes a safe read-only test request.
+        Uses the new async test_connection from razorpay_service.
         """
-        if not self.razorpay_key_id or not self.razorpay_key_secret:
+        from app.services.razorpay_service import test_connection, is_configured, is_test_mode
+        
+        if not is_configured():
             return {
                 "status": "failed",
                 "message": "Razorpay credentials not configured",
@@ -116,48 +118,24 @@ class SystemHealthChecker:
                 "timestamp": datetime.now().isoformat()
             }
         
-        # Log key format for debugging
-        print(f"🔑 Testing Razorpay with key_id: {self.razorpay_key_id}")
+        # Use the real connection test
+        test_result = await test_connection()
         
-        try:
-            # Test with a safe read-only request - fetch payment methods
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    "https://api.razorpay.com/v1/methods",
-                    auth=(self.razorpay_key_id, self.razorpay_key_secret)
-                )
-                
-                print(f"📡 Razorpay API response: {response.status_code}")
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    
-                    return {
-                        "status": "success",
-                        "message": "Razorpay API responding correctly",
-                        "connected": True,
-                        "mode": "test" if self.razorpay_key_id.startswith("rzp_test_") else "live",
-                        "methods_available": len(data),
-                        "timestamp": datetime.now().isoformat()
-                    }
-                else:
-                    error_text = response.text
-                    print(f"❌ Razorpay error body: {error_text}")
-                    return {
-                        "status": "failed",
-                        "message": f"Razorpay API error: {response.status_code}",
-                        "connected": False,
-                        "error_code": response.status_code,
-                        "error_detail": error_text[:200],
-                        "timestamp": datetime.now().isoformat()
-                    }
-                    
-        except Exception as e:
-            print(f"❌ Razorpay exception: {type(e).__name__}: {str(e)}")
+        if test_result.get("success"):
+            return {
+                "status": "success",
+                "message": "Razorpay API authenticated successfully",
+                "connected": True,
+                "mode": "test" if is_test_mode() else "live",
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
             return {
                 "status": "failed",
-                "message": f"Razorpay API connection error: {str(e)}",
+                "message": test_result.get("message", "Unknown error"),
                 "connected": False,
+                "error_code": test_result.get("error_code"),
+                "hint": test_result.get("hint"),
                 "timestamp": datetime.now().isoformat()
             }
     
