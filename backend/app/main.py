@@ -14,6 +14,11 @@ approval", and an auditor needs the rule.
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import os
+
+# Load .env file if exists (for local development)
+from dotenv import load_dotenv
+load_dotenv()
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -543,28 +548,34 @@ async def get_ai_recommendation(event: PaymentEvent):
 def get_services_status():
     """Check status of all integrated services."""
     import os
-    from app.services.razorpay_service import is_configured as razorpay_configured
-    from app.services.groq_service import is_configured as groq_configured, get_provider_status
+    # Import inside function to avoid circular/missing dependencies
     from app.db import health_check
     
     db_status = health_check()
     
-    # Debug info to verify env vars are loaded
-    groq_key = os.getenv("GROQ_API_KEY", "")
+    # Check Razorpay without importing the module
     razorpay_key_id = os.getenv("RAZORPAY_KEY_ID", "")
     razorpay_secret = os.getenv("RAZORPAY_KEY_SECRET", "")
+    razorpay_configured = bool(razorpay_key_id and razorpay_secret)
+    
+    # Check Groq
+    groq_key = os.getenv("GROQ_API_KEY", "")
+    groq_configured = bool(groq_key)
     
     return {
         "services": {
             "database": db_status,
             "razorpay": {
-                "configured": razorpay_configured(),
-                "status": "active" if razorpay_configured() else "not_configured",
+                "configured": razorpay_configured,
+                "status": "active" if razorpay_configured else "not_configured",
                 "key_id_preview": razorpay_key_id[:15] + "..." if razorpay_key_id else "NOT_SET",
                 "secret_preview": razorpay_secret[:10] + "..." if razorpay_secret else "NOT_SET"
             },
             "groq_ai": {
-                **get_provider_status(),
+                "provider": "Groq",
+                "model": "llama-3.3-70b-versatile",
+                "configured": groq_configured,
+                "status": "active" if groq_configured else "not_configured",
                 "key_preview": groq_key[:15] + "..." if groq_key else "NOT_SET"
             }
         },
