@@ -1,10 +1,11 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import AppLayout from '@/components/app-layout'
 
 export const metadata: Metadata = {
-  title: 'RecoveryAgent | Revenue Recovery Overview',
-  description: 'Understand revenue at risk and recover failed payments automatically with RecoveryAgent.',
+  title: 'RecoveryAgent | Revenue Recovery Dashboard',
+  description: 'AI-powered revenue recovery agent - Detect at-risk revenue, determine interventions, and execute bounded recovery workflows.',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -41,7 +42,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
-        {children}
+        <AppLayout>{children}</AppLayout>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

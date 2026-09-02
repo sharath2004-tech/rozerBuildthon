@@ -376,3 +376,119 @@ def resolve_queue(data: dict):
         "success": True,
         "message": f"Queue item {data.get('queue_id')} {data.get('resolution')}"
     }
+
+
+# ===== Razorpay Webhook Handler =====
+
+@app.post("/webhook/razorpay")
+async def razorpay_webhook(request: dict):
+    """Handle Razorpay payment webhook events."""
+    from app.services.razorpay_service import verify_webhook_signature, is_configured
+    from app.db import engine, get_db
+    from sqlalchemy import text
+    
+    if not is_configured():
+        return {"message": "Razorpay not configured", "processed": False}
+    
+    event_type = request.get("event")
+    payload = request.get("payload", {})
+    payment = payload.get("payment", {}).get("entity", {})
+    
+    if event_type == "payment.failed":
+        payment_id = payment.get("id")
+        amount_inr = payment.get("amount", 0) / 100  # Convert from paise
+        failure_code = payment.get("error_code")
+        customer_id = payment.get("contact", "unknown")
+        
+        # Log failed payment to database
+        if engine:
+            try:
+                with engine.connect() as conn:
+                    conn.execute(text("""
+                        INSERT INTO payment_logs 
+                        (payment_id, event_type, status, amount_inr, metadata)
+                        VALUES (:payment_id, :event_type, :status, :amount_inr, :metadata)
+                    """), {
+                        "payment_id": payment_id,
+                        "event_type": "payment.failed",
+                        "status": "failed",
+                        "amount_inr": amount_inr,
+                        "metadata": str(payment)
+                    })
+                    conn.commit()
+            except Exception as e:
+                print(f"Error logging payment: {e}")
+        
+        return {
+            "message": "Payment failure logged",
+            "payment_id": payment_id,
+            "amount": amount_inr,
+            "processed": True
+        }
+    
+    return {"message": "Event received", "event": event_type, "processed": True}
+
+
+# ===== AI Recommendation Endpoint =====
+
+@app.post("/ai/recommend")
+async def get_ai_recommendation(event: PaymentEvent):
+    """Get AI-powered recovery recommendation using Groq."""
+    from app.services.groq_service import get_recovery_recommendation, is_configured
+    
+    if not is_configured():
+        return {
+            "error": "AI not configured",
+            "message": "GROQ_API_KEY not set",
+            "fallback": "Using rule-based decisions only"
+        }
+    
+    customer_history = {
+        "lifetime_payments": event.lifetime_payments,
+        "lifetime_recoveries": event.lifetime_recoveries,
+        "hours_since_failure": event.hours_since_failure
+    }
+    
+    recommendation = await get_recovery_recommendation(
+        event.payment_id,
+        event.amount_inr,
+        event.failure_code or "unknown",
+        customer_history
+    )
+    
+    if recommendation:
+        return {
+            "payment_id": event.payment_id,
+            "ai_recommendation": recommendation,
+            "provider": "Groq",
+            "model": "llama-3.3-70b-versatile"
+        }
+    else:
+        return {
+            "error": "AI recommendation failed",
+            "fallback": "Using rule-based recovery"
+        }
+
+
+# ===== Service Status Endpoint =====
+
+@app.get("/services/status")
+def get_services_status():
+    """Check status of all integrated services."""
+    from app.services.razorpay_service import is_configured as razorpay_configured
+    from app.services.groq_service import is_configured as groq_configured, get_provider_status
+    from app.db import health_check
+    
+    db_status = health_check()
+    
+    return {
+        "services": {
+            "database": db_status,
+            "razorpay": {
+                "configured": razorpay_configured(),
+                "status": "active" if razorpay_configured() else "not_configured"
+            },
+            "groq_ai": get_provider_status()
+        },
+        "version": app.version
+    }
