@@ -20,17 +20,36 @@ if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET:
 
 
 def verify_webhook_signature(payload: bytes, signature: str) -> bool:
-    """Verify Razorpay webhook signature for security."""
+    """
+    Verify Razorpay webhook signature for security.
+    
+    Razorpay sends signature in X-Razorpay-Signature header.
+    We compute HMAC SHA256 of the payload and compare.
+    """
     if not RAZORPAY_WEBHOOK_SECRET:
+        print("⚠️ RAZORPAY_WEBHOOK_SECRET not configured, skipping verification")
         return True  # Skip verification if secret not set (dev mode)
     
-    expected_signature = hmac.new(
-        RAZORPAY_WEBHOOK_SECRET.encode(),
-        payload,
-        hashlib.sha256
-    ).hexdigest()
-    
-    return hmac.compare_digest(expected_signature, signature)
+    try:
+        expected_signature = hmac.new(
+            RAZORPAY_WEBHOOK_SECRET.encode('utf-8'),
+            payload,
+            hashlib.sha256
+        ).hexdigest()
+        
+        is_valid = hmac.compare_digest(expected_signature, signature)
+        
+        if is_valid:
+            print("✅ Webhook signature verified")
+        else:
+            print(f"❌ Signature mismatch!")
+            print(f"   Expected: {expected_signature[:20]}...")
+            print(f"   Received: {signature[:20]}...")
+        
+        return is_valid
+    except Exception as e:
+        print(f"❌ Error verifying signature: {e}")
+        return False
 
 
 def fetch_payment_details(payment_id: str) -> Optional[dict]:

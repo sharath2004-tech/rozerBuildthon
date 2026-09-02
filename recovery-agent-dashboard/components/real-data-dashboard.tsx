@@ -17,6 +17,7 @@ import {
   formatDate,
   type BatchResult
 } from '@/lib/api'
+import PaymentList from './payment-list'
 
 function IconBox({ children, tone = 'navy' }: { children: React.ReactNode; tone?: string }) {
   return <span className={`icon-box ${tone}`}>{children}</span>
@@ -191,6 +192,9 @@ export default function RealDataDashboard() {
               up={roi > 5}
             />
           </section>
+
+          {/* Payment List - Click to view details */}
+          <PaymentList />
 
           {/* Batch Results Table - Real Data */}
           <section className="panel table-panel">

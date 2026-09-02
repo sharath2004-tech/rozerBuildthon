@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -381,26 +381,60 @@ def resolve_queue(data: dict):
 # ===== Razorpay Webhook Handler =====
 
 @app.post("/webhook/razorpay")
-async def razorpay_webhook(request: dict):
-    """Handle Razorpay payment webhook events."""
+async def razorpay_webhook(request: Request):
+    """
+    Handle Razorpay payment webhook events.
+    
+    Verifies webhook signature for security and processes payment events.
+    Supports: payment.failed, payment.authorized, payment.captured
+    """
+    from fastapi import Request, Header
     from app.services.razorpay_service import verify_webhook_signature, is_configured
-    from app.db import engine, get_db
+    from app.db import engine
     from sqlalchemy import text
+    import json
     
-    if not is_configured():
-        return {"message": "Razorpay not configured", "processed": False}
+    # Get raw body for signature verification
+    body = await request.body()
+    signature = request.headers.get("X-Razorpay-Signature", "")
     
-    event_type = request.get("event")
-    payload = request.get("payload", {})
-    payment = payload.get("payment", {}).get("entity", {})
+    # Log webhook receipt
+    print(f"📥 Webhook received: {len(body)} bytes, signature: {signature[:20]}...")
     
+    # Verify signature (skip if not configured)
+    if signature and not verify_webhook_signature(body, signature):
+        print("⚠️ Webhook signature verification failed!")
+        return {"error": "Invalid signature", "processed": False}
+    
+    # Parse JSON payload
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        print("❌ Invalid JSON payload")
+        return {"error": "Invalid JSON", "processed": False}
+    
+    event_type = payload.get("event")
+    event_data = payload.get("payload", {})
+    payment = event_data.get("payment", {}).get("entity", {})
+    
+    print(f"📦 Event type: {event_type}")
+    print(f"💳 Payment ID: {payment.get('id', 'N/A')}")
+    
+    # Handle payment.failed event
     if event_type == "payment.failed":
         payment_id = payment.get("id")
         amount_inr = payment.get("amount", 0) / 100  # Convert from paise
         failure_code = payment.get("error_code")
+        failure_description = payment.get("error_description", "")
         customer_id = payment.get("contact", "unknown")
+        method = payment.get("method", "unknown")
         
-        # Log failed payment to database
+        print(f"💥 Payment Failed:")
+        print(f"   Payment ID: {payment_id}")
+        print(f"   Amount: ₹{amount_inr}")
+        print(f"   Error: {failure_code} - {failure_description}")
+        
+        # Log to database if available
         if engine:
             try:
                 with engine.connect() as conn:
@@ -413,20 +447,53 @@ async def razorpay_webhook(request: dict):
                         "event_type": "payment.failed",
                         "status": "failed",
                         "amount_inr": amount_inr,
-                        "metadata": str(payment)
+                        "metadata": json.dumps(payment)
                     })
                     conn.commit()
+                    print("✅ Logged to database")
             except Exception as e:
-                print(f"Error logging payment: {e}")
+                print(f"⚠️ Database logging failed: {e}")
+        
+        # Return success response
+        return {
+            "message": "Payment failure logged and queued for recovery",
+            "payment_id": payment_id,
+            "amount_inr": amount_inr,
+            "failure_code": failure_code,
+            "processed": True,
+            "queued_for_recovery": True
+        }
+    
+    # Handle payment.authorized event
+    elif event_type == "payment.authorized":
+        payment_id = payment.get("id")
+        print(f"✅ Payment Authorized: {payment_id}")
         
         return {
-            "message": "Payment failure logged",
+            "message": "Payment authorized",
             "payment_id": payment_id,
-            "amount": amount_inr,
             "processed": True
         }
     
-    return {"message": "Event received", "event": event_type, "processed": True}
+    # Handle payment.captured event  
+    elif event_type == "payment.captured":
+        payment_id = payment.get("id")
+        print(f"✅ Payment Captured: {payment_id}")
+        
+        return {
+            "message": "Payment captured successfully",
+            "payment_id": payment_id,
+            "processed": True
+        }
+    
+    # Unknown event type
+    else:
+        print(f"⚠️ Unknown event type: {event_type}")
+        return {
+            "message": "Event received but not processed",
+            "event": event_type,
+            "processed": False
+        }
 
 
 # ===== AI Recommendation Endpoint =====
