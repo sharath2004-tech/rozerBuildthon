@@ -11,6 +11,12 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL = "llama-3.3-70b-versatile"  # Fast and accurate
 
+# Debug: Print on startup
+if GROQ_API_KEY:
+    print(f"✅ Groq API key loaded: {GROQ_API_KEY[:15]}...")
+else:
+    print("⚠️ GROQ_API_KEY not found in environment")
+
 
 async def get_recovery_recommendation(
     payment_id: str,
@@ -79,11 +85,12 @@ Respond in JSON format:
                 recommendation = json.loads(content)
                 return recommendation
             else:
-                print(f"Groq API error: {response.status_code}")
+                error_body = response.text
+                print(f"❌ Groq API error {response.status_code}: {error_body}")
                 return None
                 
     except Exception as e:
-        print(f"Error calling Groq API: {e}")
+        print(f"❌ Error calling Groq API: {type(e).__name__}: {e}")
         return None
 
 
