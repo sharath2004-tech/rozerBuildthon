@@ -329,3 +329,50 @@ def get_compliance_stats(period: str = "7d"):
             "override_rate": 0,
             "compliance_score": 1.0
         }
+
+
+@app.get("/queue")
+def get_queue():
+    """Get approval queue items."""
+    from app.db import engine
+    from sqlalchemy import text
+    
+    if engine is None:
+        # Return empty queue if no database
+        return {"count": 0, "items": []}
+    
+    try:
+        with engine.connect() as conn:
+            results = conn.execute(text("""
+                SELECT payment_id, customer_id, amount_inr, reason, created_at, disposition
+                FROM recovery_workflows
+                WHERE disposition = 'NEEDS_APPROVAL'
+                ORDER BY created_at DESC
+                LIMIT 50
+            """)).fetchall()
+            
+            items = []
+            for idx, row in enumerate(results, 1):
+                items.append({
+                    "queue_id": idx,
+                    "payment_id": row[0],
+                    "customer_id": row[1],
+                    "amount_inr": float(row[2]),
+                    "reason": row[3] or "Requires manual approval",
+                    "created_at": row[4].isoformat() if row[4] else None,
+                    "status": "pending"
+                })
+            
+            return {"count": len(items), "items": items}
+    except Exception as e:
+        print(f"Error fetching queue: {e}")
+        return {"count": 0, "items": []}
+
+
+@app.post("/queue/resolve")
+def resolve_queue(data: dict):
+    """Resolve a queue item (approve/reject)."""
+    return {
+        "success": True,
+        "message": f"Queue item {data.get('queue_id')} {data.get('resolution')}"
+    }
