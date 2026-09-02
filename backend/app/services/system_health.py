@@ -55,7 +55,7 @@ class SystemHealthChecker:
                         "Content-Type": "application/json"
                     },
                     json={
-                        "model": "llama3-70b-8192",
+                        "model": "llama-3.3-70b-versatile",
                         "messages": [
                             {
                                 "role": "user",
@@ -77,7 +77,7 @@ class SystemHealthChecker:
                         "status": "success",
                         "message": "Groq API responding correctly",
                         "connected": True,
-                        "model": "llama3-70b-8192",
+                        "model": "llama-3.3-70b-versatile",
                         "test_response": reply[:50],
                         "timestamp": datetime.now().isoformat()
                     }
