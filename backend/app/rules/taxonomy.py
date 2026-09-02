@@ -33,6 +33,7 @@ _HARD: set[str] = {
     "transaction_not_permitted",
     "fraud_suspected",
     "payment_blocked_by_issuer",
+    "declined_by_bank",
 }
 
 # Transient and genuinely worth another attempt -- but the *timing* differs
@@ -55,6 +56,8 @@ _ABANDONED: set[str] = {
     "upi_collect_expired",
     "upi_request_timed_out",
     "user_dropped_off",
+    "authentication_abandoned",
+    "collect_timeout",
 }
 
 # Infrastructure, not the customer.
@@ -65,6 +68,7 @@ _TECHNICAL: set[str] = {
     "server_error",
     "payment_timed_out",
     "upstream_error",
+    "bank_timeout",
 }
 
 _ISSUER_DOWN: set[str] = {

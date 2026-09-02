@@ -492,3 +492,40 @@ def get_services_status():
         },
         "version": app.version
     }
+
+
+@app.get("/system/health")
+async def system_health_check():
+    """
+    Comprehensive system health check with real API calls.
+    
+    Tests actual connectivity to all services:
+    - Groq API
+    - Razorpay API  
+    - Database
+    - Webhook processing
+    - Agent reasoning
+    """
+    from app.services.system_health import get_system_health
+    
+    health_results = await get_system_health()
+    return health_results
+
+
+@app.post("/system/test-webhook")
+def test_webhook_endpoint(data: dict):
+    """
+    Test webhook endpoint with sample data.
+    
+    Used by system health checks to verify webhook processing.
+    """
+    from app.services.system_health import SystemHealthChecker
+    
+    checker = SystemHealthChecker()
+    result = checker.test_webhook_processing()
+    
+    return {
+        "test": "webhook",
+        "result": result,
+        "sample_processed": True
+    }

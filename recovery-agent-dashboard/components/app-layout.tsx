@@ -10,7 +10,8 @@ import {
   TrendingUp, 
   Menu,
   X,
-  Activity
+  Activity,
+  Stethoscope
 } from 'lucide-react'
 
 const navigation = [
@@ -18,6 +19,7 @@ const navigation = [
   { name: 'At-Risk Revenue', href: '/at-risk', icon: AlertTriangle },
   { name: 'Recovery Actions', href: '/recovery-actions', icon: PlayCircle },
   { name: 'Insights & Analytics', href: '/insights', icon: TrendingUp },
+  { name: 'System Health', href: '/system-health', icon: Stethoscope },
 ]
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
