@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { 
-  Flask, 
+  Beaker, 
   CreditCard, 
   ShoppingCart, 
   RefreshCw, 
@@ -511,7 +511,7 @@ export default function DemoMode() {
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
-          <Flask className="h-8 w-8 text-purple-600" />
+          <Beaker className="h-8 w-8 text-purple-600" />
           <h1 className="text-3xl font-bold text-gray-900">Revenue Recovery Simulator</h1>
           <span className="px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full">
             SAFE SIMULATION
@@ -598,7 +598,7 @@ export default function DemoMode() {
       {/* Empty State */}
       {cases.length === 0 && !loading && (
         <div className="bg-gradient-to-br from-purple-50 to-blue-50 p-12 rounded-lg border-2 border-dashed border-purple-200 text-center mb-8">
-          <Flask className="h-16 w-16 text-purple-400 mx-auto mb-4" />
+          <Beaker className="h-16 w-16 text-purple-400 mx-auto mb-4" />
           <h3 className="text-xl font-semibold text-gray-900 mb-2">Ready to simulate</h3>
           <p className="text-gray-600 mb-6">
             Choose a recovery scenario to see how Rozer detects revenue risk and selects the right intervention.
