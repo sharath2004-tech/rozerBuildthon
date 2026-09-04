@@ -1,12 +1,41 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ShieldAlert, AlertCircle, Clock, TrendingDown, ChevronRight } from 'lucide-react'
+import { ShieldAlert, AlertCircle, Clock, TrendingDown, ChevronRight, Check, Loader, X } from 'lucide-react'
 import { getQueue, formatINR, formatDate } from '@/lib/api'
 
 export default function AtRiskRevenue() {
   const [queue, setQueue] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [reviewModal, setReviewModal] = useState<any>(null)
+  const [actionStatus, setActionStatus] = useState<Record<number, 'idle' | 'approving' | 'approved' | 'rejected'>>({})
+  const [toast, setToast] = useState('')
+
+  const showToast = (message: string) => {
+    setToast(message)
+    setTimeout(() => setToast(''), 3000)
+  }
+
+  const handleReviewClick = (caseData: any) => {
+    setReviewModal(caseData)
+  }
+
+  const handleApprove = async (caseId: number) => {
+    setActionStatus(prev => ({ ...prev, [caseId]: 'approving' }))
+    
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1200))
+    
+    setActionStatus(prev => ({ ...prev, [caseId]: 'approved' }))
+    setReviewModal(null)
+    showToast('✓ Recovery approved and initiated!')
+  }
+
+  const handleReject = async (caseId: number) => {
+    setActionStatus(prev => ({ ...prev, [caseId]: 'rejected' }))
+    setReviewModal(null)
+    showToast('✗ Recovery blocked as per policy')
+  }
 
   useEffect(() => {
     async function loadData() {
@@ -108,7 +137,25 @@ export default function AtRiskRevenue() {
                   <td>{c.reason}</td>
                   <td><span className={`risk-badge ${c.priority === 'critical' ? 'high' : c.priority}`}>{c.priority}</span></td>
                   <td><Clock size={14} className="inline" /> {c.age_hours}h ago</td>
-                  <td><button className="primary-button" style={{padding: '0.3rem 0.8rem', fontSize: '0.85rem'}}>Review</button></td>
+                  <td>
+                    <button 
+                      className="primary-button" 
+                      style={{
+                        padding: '0.3rem 0.8rem', 
+                        fontSize: '0.85rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem'
+                      }}
+                      onClick={() => handleReviewClick(c)}
+                      disabled={actionStatus[c.id] === 'approved' || actionStatus[c.id] === 'rejected'}
+                    >
+                      {actionStatus[c.id] === 'approved' && <Check size={14} />}
+                      {actionStatus[c.id] === 'rejected' && <X size={14} />}
+                      {actionStatus[c.id] === 'approved' ? 'Approved' : 
+                       actionStatus[c.id] === 'rejected' ? 'Blocked' : 'Review'}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -182,6 +229,150 @@ export default function AtRiskRevenue() {
         </div>
       </section>
 
+      {/* Review Modal */}
+      {reviewModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: 'var(--background)',
+            borderRadius: '12px',
+            padding: '2rem',
+            maxWidth: '600px',
+            width: '90%',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+          }}>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '1.5rem'}}>
+              <div>
+                <h2 style={{margin: 0, marginBottom: '0.5rem'}}>Review High-Value Case</h2>
+                <p style={{color: 'var(--text-secondary)', margin: 0}}>Approve or block recovery attempt</p>
+              </div>
+              <button 
+                onClick={() => setReviewModal(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  padding: '0.5rem'
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{
+              background: 'var(--surface)',
+              padding: '1.5rem',
+              borderRadius: '8px',
+              marginBottom: '1.5rem'
+            }}>
+              <div style={{display: 'grid', gap: '1rem'}}>
+                <div>
+                  <div style={{fontSize: '0.85rem', color: 'var(--text-secondary)'}}>Payment ID</div>
+                  <code>{reviewModal.payment_id}</code>
+                </div>
+                <div>
+                  <div style={{fontSize: '0.85rem', color: 'var(--text-secondary)'}}>Customer</div>
+                  <strong>{reviewModal.customer}</strong>
+                </div>
+                <div>
+                  <div style={{fontSize: '0.85rem', color: 'var(--text-secondary)'}}>Amount</div>
+                  <strong style={{fontSize: '1.5rem', color: 'var(--error)'}}>{formatINR(reviewModal.amount)}</strong>
+                </div>
+                <div>
+                  <div style={{fontSize: '0.85rem', color: 'var(--text-secondary)'}}>Reason</div>
+                  <div>{reviewModal.reason}</div>
+                </div>
+                <div>
+                  <div style={{fontSize: '0.85rem', color: 'var(--text-secondary)'}}>Priority</div>
+                  <span className={`risk-badge ${reviewModal.priority === 'critical' ? 'high' : reviewModal.priority}`}>
+                    {reviewModal.priority}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{
+              background: 'var(--info-bg)',
+              border: '1px solid var(--info)',
+              padding: '1rem',
+              borderRadius: '6px',
+              marginBottom: '1.5rem',
+              fontSize: '0.9rem'
+            }}>
+              <strong>AI Recommendation:</strong> Approve recovery with priority escalation
+            </div>
+
+            <div style={{display: 'flex', gap: '1rem'}}>
+              <button
+                onClick={() => handleReject(reviewModal.id)}
+                style={{
+                  flex: 1,
+                  padding: '0.75rem',
+                  background: 'transparent',
+                  border: '2px solid var(--error)',
+                  color: 'var(--error)',
+                  borderRadius: '6px',
+                  fontSize: '0.95rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                Block Recovery
+              </button>
+              <button
+                onClick={() => handleApprove(reviewModal.id)}
+                disabled={actionStatus[reviewModal.id] === 'approving'}
+                style={{
+                  flex: 1,
+                  padding: '0.75rem',
+                  background: 'var(--success)',
+                  border: 'none',
+                  color: 'white',
+                  borderRadius: '6px',
+                  fontSize: '0.95rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                {actionStatus[reviewModal.id] === 'approving' && <Loader size={16} className="spin" />}
+                {actionStatus[reviewModal.id] === 'approving' ? 'Approving...' : 'Approve Recovery'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div style={{
+          position: 'fixed',
+          bottom: '2rem',
+          right: '2rem',
+          background: toast.startsWith('✓') ? 'var(--success)' : 'var(--error)',
+          color: 'white',
+          padding: '1rem 1.5rem',
+          borderRadius: '8px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          zIndex: 1000
+        }}>
+          {toast}
+        </div>
+      )}
+
       <style jsx>{`
         .loading {
           display: flex;
@@ -208,6 +399,13 @@ export default function AtRiskRevenue() {
           display: inline;
           vertical-align: middle;
           margin-right: 0.25rem;
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        :global(.spin) {
+          animation: spin 1s linear infinite;
         }
       `}</style>
     </div>

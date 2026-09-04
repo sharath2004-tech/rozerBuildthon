@@ -1,9 +1,32 @@
 'use client'
 
-import { TrendingUp, DollarSign, Users, Zap, ArrowUpRight, ArrowDown } from 'lucide-react'
+import { useState } from 'react'
+import { TrendingUp, DollarSign, Users, Zap, ArrowUpRight, ArrowDown, Check, Loader } from 'lucide-react'
 import { formatINR } from '@/lib/api'
 
 export default function Insights() {
+  const [actionStatus, setActionStatus] = useState<Record<number, 'idle' | 'loading' | 'success'>>({})
+  const [toast, setToast] = useState('')
+
+  const showToast = (message: string) => {
+    setToast(message)
+    setTimeout(() => setToast(''), 3000)
+  }
+
+  const handleActionClick = async (insightIndex: number, actionName: string) => {
+    setActionStatus(prev => ({ ...prev, [insightIndex]: 'loading' }))
+    
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1500))
+    
+    setActionStatus(prev => ({ ...prev, [insightIndex]: 'success' }))
+    showToast(`✓ ${actionName} activated successfully!`)
+    
+    // Reset after 3 seconds
+    setTimeout(() => {
+      setActionStatus(prev => ({ ...prev, [insightIndex]: 'idle' }))
+    }, 3000)
+  }
   const insights = [
     {
       title: 'Checkout abandonment peaks 8-10 PM',
@@ -141,8 +164,23 @@ export default function Insights() {
                     potential revenue
                   </span>
                 </div>
-                <button className="primary-button" style={{padding: '0.5rem 1rem', fontSize: '0.85rem'}}>
-                  {insight.recommendation}
+                <button 
+                  className="primary-button" 
+                  style={{
+                    padding: '0.5rem 1rem', 
+                    fontSize: '0.85rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    minWidth: '200px',
+                    justifyContent: 'center'
+                  }}
+                  onClick={() => handleActionClick(idx, insight.recommendation)}
+                  disabled={actionStatus[idx] === 'loading' || actionStatus[idx] === 'success'}
+                >
+                  {actionStatus[idx] === 'loading' && <Loader size={14} className="spin" />}
+                  {actionStatus[idx] === 'success' && <Check size={14} />}
+                  {actionStatus[idx] === 'success' ? 'Activated!' : insight.recommendation}
                 </button>
               </div>
             </div>
@@ -232,7 +270,31 @@ export default function Insights() {
           display: inline;
           vertical-align: middle;
         }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        :global(.spin) {
+          animation: spin 1s linear infinite;
+        }
       `}</style>
+
+      {toast && (
+        <div style={{
+          position: 'fixed',
+          bottom: '2rem',
+          right: '2rem',
+          background: 'var(--success)',
+          color: 'white',
+          padding: '1rem 1.5rem',
+          borderRadius: '8px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          zIndex: 1000,
+          animation: 'slideIn 0.3s ease'
+        }}>
+          {toast}
+        </div>
+      )}
     </div>
   )
 }
