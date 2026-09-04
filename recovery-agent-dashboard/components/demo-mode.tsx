@@ -759,16 +759,27 @@ export default function DemoMode() {
                   onChange={(e) => setCustomInput({...customInput, failure_code: e.target.value})}
                   className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                 >
-                  <option value="insufficient_funds">Insufficient Funds (Soft Decline)</option>
-                  <option value="card_expired">Card Expired (Hard Decline)</option>
-                  <option value="network_error">Network Error (Technical)</option>
-                  <option value="bank_timeout">Bank Timeout (Technical)</option>
-                  <option value="payment_timed_out">Payment Timed Out (Technical)</option>
-                  <option value="authentication_abandoned">Authentication Abandoned</option>
-                  <option value="otp_not_entered">OTP Not Entered (Abandoned)</option>
-                  <option value="issuer_down">Issuer/Bank Down</option>
-                  <option value="limit_exceeded">Limit Exceeded (Soft Decline)</option>
+                  <optgroup label="✅ Retryable (Will Auto-Retry)">
+                    <option value="insufficient_funds">Insufficient Funds</option>
+                    <option value="limit_exceeded">Limit Exceeded</option>
+                    <option value="network_error">Network Error</option>
+                    <option value="bank_timeout">Bank Timeout</option>
+                    <option value="payment_timed_out">Payment Timed Out</option>
+                  </optgroup>
+                  <optgroup label="🔗 Abandoned (Send Link)">
+                    <option value="authentication_abandoned">Authentication Abandoned</option>
+                    <option value="otp_not_entered">OTP Not Entered</option>
+                  </optgroup>
+                  <optgroup label="⏸️ Deferred (Wait)">
+                    <option value="issuer_down">Issuer/Bank Down (G08 blocks)</option>
+                  </optgroup>
+                  <optgroup label="❌ Blocked (Never Retry)">
+                    <option value="card_expired">Card Expired (G04 hard decline)</option>
+                  </optgroup>
                 </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Choose from retryable failures to see successful recovery
+                </p>
               </div>
 
               {/* Customer Type */}
