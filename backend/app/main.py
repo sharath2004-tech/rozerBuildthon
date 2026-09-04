@@ -237,47 +237,72 @@ def get_recovery_metrics(period: str = "7d"):
 
 @app.get("/analytics/batch-results")
 def get_batch_results(period: str = "7d", limit: int = 50):
-    """Get batch results for dashboard."""
+    """Get batch results for dashboard - matches frontend TypeScript interface."""
     from app.db import engine
     from sqlalchemy import text
     
     if engine is None:
-        # Return demo data
+        # Return demo data matching frontend interface
         return {
             "period": period,
             "batches": [
                 {
                     "batch_id": "BATCH_20260901_001",
-                    "total_payments": 45,
-                    "auto_retried": 32,
-                    "needs_approval": 10,
-                    "blocked": 3,
-                    "success_rate": 0.711,
-                    "created_at": "2026-09-01T10:30:00Z"
+                    "workflow_type": "auto_retry",
+                    "total_cases": 45,
+                    "amount_attempted": 250000,
+                    "amount_recovered": 177750,
+                    "recovery_rate": 71.1,
+                    "roi": 8.5,
+                    "total_cost": 20900,
+                    "completed_at": "2026-09-01T10:30:00Z"
                 }
             ]
         }
     
     with engine.connect() as conn:
+        # Query actual schema from seed_data.py
         results = conn.execute(text("""
             SELECT batch_id, total_payments, auto_retried, needs_approval, 
-                   blocked, success_rate, created_at
+                   blocked, total_amount_inr, recovered_amount_inr, 
+                   success_rate, completed_at
             FROM batch_results
-            WHERE created_at >= NOW() - INTERVAL '7 days'
-            ORDER BY created_at DESC
+            WHERE completed_at >= NOW() - INTERVAL '7 days'
+            ORDER BY completed_at DESC
             LIMIT :limit
         """), {"limit": limit}).fetchall()
         
         batches = []
         for row in results:
+            total_payments = row[1]
+            auto_retried = row[2]
+            total_amount_inr = row[5] or 0
+            recovered_amount_inr = row[6] or 0
+            success_rate = float(row[7] or 0) * 100  # Convert to percentage
+            
+            # Calculate ROI (assume ₹250 cost per case)
+            cost_per_case = 250
+            total_cost = total_payments * cost_per_case
+            roi = (recovered_amount_inr / total_cost) if total_cost > 0 else 0
+            
+            # Determine workflow type based on auto_retry ratio
+            if auto_retried >= total_payments * 0.6:
+                workflow_type = "auto_retry"
+            elif row[3] >= total_payments * 0.3:  # needs_approval
+                workflow_type = "manual_review"
+            else:
+                workflow_type = "payment_link"
+            
             batches.append({
                 "batch_id": row[0],
-                "total_payments": row[1],
-                "auto_retried": row[2],
-                "needs_approval": row[3],
-                "blocked": row[4],
-                "success_rate": float(row[5] or 0),
-                "created_at": row[6].isoformat() if row[6] else None
+                "workflow_type": workflow_type,
+                "total_cases": total_payments,
+                "amount_attempted": total_amount_inr,
+                "amount_recovered": recovered_amount_inr,
+                "recovery_rate": success_rate,
+                "roi": round(roi, 1),
+                "total_cost": total_cost,
+                "completed_at": row[8].isoformat() if row[8] else None
             })
         
         return {"period": period, "batches": batches}

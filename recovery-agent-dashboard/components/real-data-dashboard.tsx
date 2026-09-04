@@ -270,8 +270,8 @@ export default function RealDataDashboard() {
                       <tr key={batch.batch_id}>
                         <td><code>{batch.batch_id.slice(0, 12)}...</code></td>
                         <td>
-                          <span className={`status-badge ${batch.workflow_type}`}>
-                            {batch.workflow_type.replace(/_/g, ' ')}
+                          <span className={`status-badge ${batch.workflow_type || 'unknown'}`}>
+                            {(batch.workflow_type || 'unknown').replace(/_/g, ' ')}
                           </span>
                         </td>
                         <td><b>{batch.total_cases}</b></td>
