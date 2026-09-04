@@ -124,9 +124,9 @@ export default function DemoMode() {
   // Custom input state
   const [showCustomForm, setShowCustomForm] = useState(false)
   const [customInput, setCustomInput] = useState({
-    amount: 25000,
+    amount: 50000,  // Higher default amount for better demo
     failure_code: 'insufficient_funds',  // Use taxonomy code
-    retry_count: 1,
+    retry_count: 1,  // Within retry cap
     customer_type: 'returning',
     hours_since_failure: 2
   })
@@ -795,13 +795,15 @@ export default function DemoMode() {
                 <input
                   type="number"
                   value={customInput.retry_count}
-                  onChange={(e) => setCustomInput({...customInput, retry_count: parseInt(e.target.value) || 0})}
+                  onChange={(e) => setCustomInput({...customInput, retry_count: Math.min(3, Math.max(0, parseInt(e.target.value) || 0))})}
                   className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                   placeholder="1"
                   min="0"
-                  max="5"
+                  max="3"
                 />
-                <p className="text-xs text-gray-500 mt-1">How many times has recovery been attempted? (0-5)</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Max 3 retries allowed by policy (G06 rule). Enter 0-3.
+                </p>
               </div>
 
               {/* Hours Since Failure */}
