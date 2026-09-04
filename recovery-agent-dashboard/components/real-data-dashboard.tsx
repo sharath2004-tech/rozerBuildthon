@@ -74,14 +74,22 @@ export default function RealDataDashboard() {
   // Seed database with test data
   const handleSeedDatabase = async () => {
     try {
-      notify('Seeding database...')
-      const { seedDatabase } = await import('@/lib/api')
-      const result = await seedDatabase()
-      notify(result.message)
-      // Reload data after seeding
-      window.location.reload()
+      setNotice('Seeding database...')
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/system/seed-data`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      const result = await response.json()
+      
+      if (result.success) {
+        notify('Database seeded! Reloading...')
+        setTimeout(() => window.location.reload(), 1500)
+      } else {
+        notify(`Error: ${result.message}`)
+      }
     } catch (err: any) {
       notify(`Error: ${err.message}`)
+      console.error('Seed error:', err)
     }
   }
 
