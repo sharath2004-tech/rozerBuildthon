@@ -71,6 +71,20 @@ export default function RealDataDashboard() {
     window.setTimeout(() => setNotice(''), 2600)
   }
 
+  // Seed database with test data
+  const handleSeedDatabase = async () => {
+    try {
+      notify('Seeding database...')
+      const { seedDatabase } = await import('@/lib/api')
+      const result = await seedDatabase()
+      notify(result.message)
+      // Reload data after seeding
+      window.location.reload()
+    } catch (err: any) {
+      notify(`Error: ${err.message}`)
+    }
+  }
+
   // Map range to API period
   const getPeriod = () => {
     if (range === 'Today') return '24h'
@@ -142,16 +156,35 @@ export default function RealDataDashboard() {
           <h1 className="text-3xl font-bold">Revenue Recovery Overview</h1>
           <p className="text-gray-600">Real-time data from FastAPI backend showing actual recovery performance.</p>
         </div>
-        <div className="range-control" role="group" aria-label="Date range">
-          {['Today', 'Last 7 days', 'Last 30 days'].map(item => (
-            <button
-              key={item}
-              className={range === item ? 'selected' : ''}
-              onClick={() => setRange(item)}
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          {(metrics?.total_attempted === 0 || metrics?.total_attempted === undefined) && (
+            <button 
+              onClick={handleSeedDatabase}
+              style={{
+                background: '#10b981',
+                color: 'white',
+                padding: '10px 16px',
+                borderRadius: '6px',
+                border: 'none',
+                fontSize: '13px',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
             >
-              {item}
+              Seed Test Data
             </button>
-          ))}
+          )}
+          <div className="range-control" role="group" aria-label="Date range">
+            {['Today', 'Last 7 days', 'Last 30 days'].map(item => (
+              <button
+                key={item}
+                className={range === item ? 'selected' : ''}
+                onClick={() => setRange(item)}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

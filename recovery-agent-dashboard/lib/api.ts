@@ -53,6 +53,15 @@ export async function healthCheck(): Promise<{ status: string; version: string }
   return res.json()
 }
 
+export async function seedDatabase(): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/system/seed-data`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  })
+  if (!res.ok) throw new Error('Failed to seed database')
+  return res.json()
+}
+
 export async function getRecoveryMetrics(period: string = '7d'): Promise<RecoveryMetrics> {
   const res = await fetch(`${API_BASE}/analytics/recovery-metrics?period=${period}`)
   if (!res.ok) throw new Error('Failed to fetch recovery metrics')
