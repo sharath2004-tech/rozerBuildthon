@@ -268,14 +268,13 @@ The backend exposes 22 REST endpoints organized by function. Base URL: `http://l
 | System Health | `/system/health`, `/services/status` |
 | Demo Mode | `/demo/simulate`, `/demo/full-simulation`, `/demo/custom-analysis` |
 
-See [BACKEND_API_ENDPOINTS.md](BACKEND_API_ENDPOINTS.md) for complete documentation with request/response examples.
+
 
 ---
 
 ## What this deliberately does not do
 
-Scope decisions, with reasoning, are in [DECISIONS.md](DECISIONS.md). The
-short version: one LLM provider instead of five, because a five-provider
+The short version: one LLM provider instead of five, because a five-provider
 fallback chain is five auth schemes and five failure modes in service of a
 problem nobody has; Streamlit instead of React, because the dashboard is not
 the interesting part; and no live webhook listener, because correct HMAC
