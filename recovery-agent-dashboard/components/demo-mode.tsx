@@ -224,11 +224,19 @@ export default function DemoMode() {
 
       if (response.ok) {
         const data = await response.json()
+        console.log('🔍 Agent Analysis Result:', data)
+        console.log('📋 Case Details:', data.case)
+        console.log('❓ Why blocked?', data.case.reason)
+        console.log('🚦 Rule ID:', data.case.rule_id)
+        console.log('✅ Is Executable?', data.case.is_executable)
+        
         setCases([data.case])
         setMetrics(data.metrics)
         setShowCustomForm(false)
         showToast(`✓ Custom analysis complete - ${data.case.recommended_action}`)
       } else {
+        const errorText = await response.text()
+        console.error('❌ Backend error:', errorText)
         showToast('❌ Backend unavailable - try preset scenarios')
       }
     } catch (error) {

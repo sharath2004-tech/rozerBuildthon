@@ -1091,14 +1091,15 @@ def custom_analysis(event: PaymentEvent) -> dict:
         "previous_attempts": ctx.retry_count,
         "recovery_probability": p,
         "recommended_action": decision.action.value.replace("_", " ").title(),
-        "reason": decision.reason,
+        "reason": decision.reason,  # This shows WHY it was blocked!
         "confidence": int(p * 100),
         "status": "recovered" if recovered else "no_action" if not decision.is_executable else "pending",
         "recovered_amount": recovered_amount,
         "disposition": decision.disposition.value,
-        "rule_id": decision.rule_id,
+        "rule_id": decision.rule_id,  # Which rule blocked it
         "delay_minutes": delay,
-        "expected_value": int(expected_value_inr(ctx, decision.action, p_recover=p) * 100)
+        "expected_value": int(expected_value_inr(ctx, decision.action, p_recover=p) * 100),
+        "is_executable": decision.is_executable  # Debug: is it allowed?
     }
     
     # Calculate metrics for single case
