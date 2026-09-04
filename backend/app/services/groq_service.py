@@ -95,6 +95,97 @@ Respond in JSON format:
         return None
 
 
+async def get_enhanced_explanation(
+    payment_context: dict,
+    decision: dict,
+    policy_reason: str
+) -> str:
+    """
+    Generate enhanced natural language explanation for recovery decision using Groq.
+    
+    Args:
+        payment_context: Payment details (amount, failure_code, customer info)
+        decision: Decision details (action, disposition, rule_id, probability)
+        policy_reason: Original deterministic policy reason
+    
+    Returns:
+        Enhanced explanation or falls back to policy_reason if Groq unavailable
+    """
+    if not GROQ_API_KEY:
+        return policy_reason
+    
+    # Build context for LLM
+    prompt = f"""You are an AI explaining payment recovery decisions to merchants. Generate a clear, professional explanation.
+
+**Payment Context:**
+- Amount: ₹{payment_context.get('amount_inr', 0):,.2f}
+- Failure Code: {payment_context.get('failure_code', 'unknown')}
+- Payment Rail: {payment_context.get('rail', 'unknown')}
+- Customer Type: {payment_context.get('customer_type', 'unknown')} ({payment_context.get('lifetime_payments', 0)} lifetime payments)
+- Retry Attempts: {payment_context.get('retry_count', 0)}
+- Hours Since Failure: {payment_context.get('hours_since_failure', 0)}
+
+**Decision Made:**
+- Action: {decision.get('action', 'SUPPRESS')}
+- Disposition: {decision.get('disposition', 'BLOCKED')}
+- Policy Rule: {decision.get('rule_id', 'UNKNOWN')}
+- Recovery Probability: {decision.get('probability', 0) * 100:.0f}%
+- Is Executable: {decision.get('is_executable', False)}
+
+**Policy Reason (deterministic):**
+{policy_reason}
+
+Generate a 2-3 sentence explanation that:
+1. Explains WHY this decision was made (based on the context)
+2. What this means for the merchant
+3. If blocked, explain the business/compliance reason clearly
+
+Be conversational but professional. Focus on merchant value, not technical jargon.
+Do NOT just repeat the policy reason - add context and insight."""
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                GROQ_API_URL,
+                headers={
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": GROQ_MODEL,
+                    "messages": [
+                        {
+                            "role": "system", 
+                            "content": "You are a helpful AI explaining payment recovery decisions. Be clear, concise, and merchant-focused."
+                        },
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.4,
+                    "max_tokens": 200
+                },
+                timeout=8.0
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                enhanced_explanation = data["choices"][0]["message"]["content"].strip()
+                
+                # Validate response is reasonable (not empty, not too long)
+                if enhanced_explanation and len(enhanced_explanation) > 20:
+                    print(f"✅ Groq enhanced explanation generated ({len(enhanced_explanation)} chars)")
+                    return enhanced_explanation
+                else:
+                    print(f"⚠️ Groq response too short, using fallback")
+                    return policy_reason
+            else:
+                print(f"⚠️ Groq API error {response.status_code}, using fallback")
+                return policy_reason
+                
+    except Exception as e:
+        print(f"⚠️ Groq explanation failed ({type(e).__name__}), using fallback")
+        return policy_reason
+
+
 def is_configured() -> bool:
     """Check if Groq is properly configured."""
     return GROQ_API_KEY is not None

@@ -134,12 +134,15 @@ def policy_gates() -> dict:
 
 
 @app.post("/analyze")
-def analyze(event: PaymentEvent) -> dict:
+async def analyze(event: PaymentEvent) -> dict:
     """
     Score a failed payment and return an authorised decision.
 
     This endpoint does not execute anything. Execution is a separate,
     explicitly-invoked step so that analysis is always safe to call.
+    
+    Uses Groq LLM to enhance explanation quality while keeping
+    decision-making deterministic.
     """
     ctx = _to_context(event)
 
@@ -148,6 +151,35 @@ def analyze(event: PaymentEvent) -> dict:
 
     delay = recommend_delay_minutes(ctx)
     p = estimate_recovery_probability(ctx)
+    
+    # Get enhanced explanation from Groq (falls back to policy reason if unavailable)
+    from app.services.groq_service import get_enhanced_explanation
+    
+    customer_type = "Premium" if ctx.lifetime_payments >= 10 else "Returning" if ctx.lifetime_payments > 0 else "New"
+    
+    payment_context = {
+        "amount_inr": ctx.amount_inr,
+        "failure_code": ctx.raw_failure_code,
+        "rail": ctx.rail.value,
+        "customer_type": customer_type,
+        "lifetime_payments": ctx.lifetime_payments,
+        "retry_count": ctx.retry_count,
+        "hours_since_failure": ctx.hours_since_failure
+    }
+    
+    decision_context = {
+        "action": decision.action.value,
+        "disposition": decision.disposition.value,
+        "rule_id": decision.rule_id,
+        "probability": p,
+        "is_executable": decision.is_executable
+    }
+    
+    enhanced_reason = await get_enhanced_explanation(
+        payment_context,
+        decision_context,
+        decision.reason
+    )
 
     return {
         "payment_id": ctx.payment_id,
@@ -160,7 +192,8 @@ def analyze(event: PaymentEvent) -> dict:
         "authorised_action": decision.action.value,
         "disposition": decision.disposition.value,
         "rule_id": decision.rule_id,
-        "reason": decision.reason,
+        "reason": enhanced_reason,  # Enhanced with Groq
+        "policy_reason": decision.reason,  # Original deterministic reason
         "executable": decision.is_executable,
         "scheduled_for": (
             (ctx.now + timedelta(minutes=delay)).isoformat()
@@ -1050,13 +1083,15 @@ def full_simulation() -> dict:
 
 
 @app.post("/demo/custom-analysis")
-def custom_analysis(event: PaymentEvent) -> dict:
+async def custom_analysis(event: PaymentEvent) -> dict:
     """
     Analyze a custom payment event provided by the user.
     
     This endpoint accepts user-provided payment details and runs them through
     the complete agent pipeline to demonstrate how the system would handle
     the specific scenario.
+    
+    Uses Groq LLM for enhanced, context-aware explanations.
     
     **Safe**: Demo mode - no real actions taken, no database writes.
     """
@@ -1087,18 +1122,46 @@ def custom_analysis(event: PaymentEvent) -> dict:
         recovered_amount = 0
         status = "no_action"
     
-    # Generate LLM explanation if blocked
-    explanation = decision.reason
+    # Get enhanced explanation from Groq
+    from app.services.groq_service import get_enhanced_explanation
+    
+    payment_context = {
+        "amount_inr": ctx.amount_inr,
+        "failure_code": ctx.raw_failure_code,
+        "rail": ctx.rail.value,
+        "customer_type": customer_type,
+        "lifetime_payments": ctx.lifetime_payments,
+        "retry_count": ctx.retry_count,
+        "hours_since_failure": ctx.hours_since_failure
+    }
+    
+    decision_context = {
+        "action": decision.action.value,
+        "disposition": decision.disposition.value,
+        "rule_id": decision.rule_id,
+        "probability": p,
+        "is_executable": decision.is_executable
+    }
+    
+    # Base explanation with policy context
+    base_explanation = decision.reason
     if not decision.is_executable:
-        # Add more context about WHY it was blocked
+        # Add policy context for blocked actions
         if decision.rule_id == "G06_RETRY_CAP_REACHED":
-            explanation += f" The system has already attempted recovery {ctx.retry_count} times, which exceeds our safety limit of 3 attempts to prevent customer harassment and scheme penalties."
+            base_explanation += f" The system has already attempted recovery {ctx.retry_count} times, which exceeds our safety limit of 3 attempts to prevent customer harassment and scheme penalties."
         elif decision.rule_id == "G08_ISSUER_DOWN_DEFER":
-            explanation += " Retrying during a known outage window wastes retry attempts. The system will automatically retry once the issuer is back online."
+            base_explanation += " Retrying during a known outage window wastes retry attempts. The system will automatically retry once the issuer is back online."
         elif decision.rule_id == "G12_VALUE_CEILING_APPROVAL":
-            explanation += f" High-value payments (₹{ctx.amount_inr:,.0f}) require human review to prevent unauthorized large transactions."
+            base_explanation += f" High-value payments (₹{ctx.amount_inr:,.0f}) require human review to prevent unauthorized large transactions."
         elif decision.rule_id == "G04_HARD_DECLINE":
-            explanation += " Hard declines like expired cards cannot be fixed by retrying - the customer must update their payment method first."
+            base_explanation += " Hard declines like expired cards cannot be fixed by retrying - the customer must update their payment method first."
+    
+    # Enhance with Groq
+    enhanced_explanation = await get_enhanced_explanation(
+        payment_context,
+        decision_context,
+        base_explanation
+    )
     
     demo_case = {
         "payment_id": ctx.payment_id,
@@ -1110,7 +1173,8 @@ def custom_analysis(event: PaymentEvent) -> dict:
         "previous_attempts": ctx.retry_count,
         "recovery_probability": p,
         "recommended_action": decision.action.value.replace("_", " ").title(),
-        "reason": explanation,  # Enhanced explanation
+        "reason": enhanced_explanation,  # Enhanced with Groq
+        "policy_reason": base_explanation,  # Original deterministic reason
         "confidence": int(p * 100),
         "status": status,
         "recovered_amount": recovered_amount,
