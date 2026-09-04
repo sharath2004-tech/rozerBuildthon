@@ -37,15 +37,29 @@ interface RecoveryCase {
   risk_score: number
   risk_level: 'HIGH' | 'MEDIUM' | 'LOW'
   failure_reason: string
+  failure_class?: string
   customer_type: string
   previous_attempts: number
   recovery_probability: number
   recommended_action: string
   reason: string
+  policy_reason?: string
   confidence: number
   status: 'simulated' | 'pending' | 'recovered' | 'no_action'
   recovered_amount: number
   pipeline_stage?: string
+  disposition?: string
+  rule_id?: string
+  is_executable?: boolean
+  delay_minutes?: number
+  expected_value?: number
+  breakdown?: {
+    base_probability: number
+    rail_factor: number
+    timing_multiplier: number
+    retry_penalty: number
+    days_until_payday: number
+  }
 }
 
 const scenarios = [
@@ -124,11 +138,11 @@ export default function DemoMode() {
   // Custom input state
   const [showCustomForm, setShowCustomForm] = useState(false)
   const [customInput, setCustomInput] = useState({
-    amount: 0,  // Empty - user must enter
-    failure_code: '',  // Empty - user must select
+    amount: 25000,  // Default example amount
+    failure_code: 'insufficient_funds',  // Default to a retryable failure
     retry_count: 0,
-    customer_type: 'new',  // Start with new customer
-    hours_since_failure: 0
+    customer_type: 'returning',  // Default to returning customer
+    hours_since_failure: 2
   })
 
   const showToast = (message: string) => {
@@ -180,6 +194,16 @@ export default function DemoMode() {
   }
 
   const runCustomAnalysis = async () => {
+    // Validation
+    if (!customInput.amount || customInput.amount <= 0) {
+      showToast('❌ Please enter a valid amount')
+      return
+    }
+    if (!customInput.failure_code) {
+      showToast('❌ Please select a failure reason')
+      return
+    }
+
     setLoading(true)
     setPipelineActive(true)
     setCurrentStage(0)
@@ -209,7 +233,7 @@ export default function DemoMode() {
           customer_id: `cust_custom_${Date.now()}`,
           amount_inr: customInput.amount,
           rail: 'upi',  // lowercase enum value
-          failure_code: customInput.failure_code,
+          failure_code: customInput.failure_code.toUpperCase(),  // Ensure uppercase for backend
           retry_count: customInput.retry_count,
           hours_since_failure: customInput.hours_since_failure,
           prior_actions_24h: 0,
@@ -226,21 +250,37 @@ export default function DemoMode() {
         const data = await response.json()
         console.log('🔍 Agent Analysis Result:', data)
         console.log('📋 Case Details:', data.case)
-        console.log('❓ Why blocked?', data.case.reason)
-        console.log('🚦 Rule ID:', data.case.rule_id)
-        console.log('✅ Is Executable?', data.case.is_executable)
+        console.log('❓ Reason:', data.case?.reason)
+        console.log('🚦 Rule ID:', data.case?.rule_id)
+        console.log('✅ Is Executable?', data.case?.is_executable)
         
-        setCases([data.case])
-        setMetrics(data.metrics)
-        setShowCustomForm(false)
-        showToast(`✓ Custom analysis complete - ${data.case.recommended_action}`)
+        // Ensure case has all required fields
+        if (data.case) {
+          setCases([data.case])
+          setMetrics(data.metrics)
+          setShowCustomForm(false)
+          showToast(`✓ Custom analysis complete - ${data.case.recommended_action || 'Unknown'}`)
+        } else {
+          throw new Error('Invalid response structure')
+        }
       } else {
         const errorText = await response.text()
         console.error('❌ Backend error:', errorText)
-        showToast('❌ Backend unavailable - try preset scenarios')
+        showToast('❌ Backend unavailable - using local fallback')
+        
+        // Fallback to local simulation
+        const localData = generateLocalScenario('payment_failure')
+        setCases(localData.cases)
+        setMetrics(localData.metrics)
       }
     } catch (error) {
-      showToast('❌ Error analyzing custom input')
+      console.error('❌ Error:', error)
+      showToast('❌ Error analyzing custom input - using local fallback')
+      
+      // Fallback to local simulation
+      const localData = generateLocalScenario('payment_failure')
+      setCases(localData.cases)
+      setMetrics(localData.metrics)
     } finally {
       setLoading(false)
       setTimeout(() => setPipelineActive(false), 1000)
@@ -1009,6 +1049,16 @@ export default function DemoMode() {
                     <div className="text-sm text-gray-500">Previous Attempts</div>
                     <div className="text-sm font-semibold">{selectedCase.previous_attempts}</div>
                   </div>
+                  <div>
+                    <div className="text-sm text-gray-500">Failure Reason</div>
+                    <div className="text-sm font-semibold">{selectedCase.failure_reason}</div>
+                  </div>
+                  {selectedCase.failure_class && (
+                    <div>
+                      <div className="text-sm text-gray-500">Failure Class</div>
+                      <div className="text-sm font-semibold">{selectedCase.failure_class.replace('_', ' ').toUpperCase()}</div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1043,9 +1093,71 @@ export default function DemoMode() {
                     </div>
                     <div>
                       <div className="text-sm text-gray-500">Recovery Probability</div>
-                      <div className="text-sm font-semibold">{(selectedCase.recovery_probability * 100).toFixed(0)}%</div>
+                      <div className="text-sm font-semibold">{(selectedCase.recovery_probability * 100).toFixed(1)}%</div>
                     </div>
                   </div>
+
+                  {/* Probability Breakdown (if available) */}
+                  {selectedCase.breakdown && (
+                    <div className="mt-4 pt-4 border-t">
+                      <div className="text-xs font-semibold text-gray-700 mb-2">📊 Probability Breakdown</div>
+                      <div className="space-y-2 text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Base Probability:</span>
+                          <span className="font-mono font-medium">{(selectedCase.breakdown.base_probability * 100).toFixed(1)}%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Rail Factor:</span>
+                          <span className="font-mono font-medium">{selectedCase.breakdown.rail_factor.toFixed(2)}x</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Timing Multiplier:</span>
+                          <span className="font-mono font-medium">{selectedCase.breakdown.timing_multiplier.toFixed(2)}x</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Retry Penalty:</span>
+                          <span className="font-mono font-medium">{selectedCase.breakdown.retry_penalty.toFixed(2)}x</span>
+                        </div>
+                        {selectedCase.breakdown.days_until_payday > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Days to Payday:</span>
+                            <span className="font-mono font-medium">{selectedCase.breakdown.days_until_payday} days</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between pt-2 border-t font-semibold">
+                          <span className="text-gray-900">Final Probability:</span>
+                          <span className="font-mono text-blue-600">{(selectedCase.recovery_probability * 100).toFixed(2)}%</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Policy Gate Info */}
+                  {selectedCase.rule_id && (
+                    <div className="mt-4 pt-4 border-t">
+                      <div className="text-xs font-semibold text-gray-700 mb-2">🚦 Policy Gate</div>
+                      <div className="space-y-2 text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Rule ID:</span>
+                          <code className="font-mono font-medium text-xs bg-gray-100 px-2 py-0.5 rounded">{selectedCase.rule_id}</code>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Disposition:</span>
+                          <span className={`font-medium ${
+                            selectedCase.disposition === 'allowed' ? 'text-green-600' :
+                            selectedCase.disposition === 'blocked' ? 'text-red-600' :
+                            'text-yellow-600'
+                          }`}>
+                            {selectedCase.disposition?.toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Is Executable:</span>
+                          <span className="font-medium">{selectedCase.is_executable ? '✅ Yes' : '❌ No'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

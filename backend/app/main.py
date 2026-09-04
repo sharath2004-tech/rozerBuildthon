@@ -1092,121 +1092,178 @@ async def custom_analysis(event: PaymentEvent) -> dict:
     the specific scenario.
     
     Uses Groq LLM for enhanced, context-aware explanations.
+    Shows REAL probability calculations from scoring.py
     
     **Safe**: Demo mode - no real actions taken, no database writes.
     """
-    # Run actual agent analysis on user input
-    ctx = _to_context(event)
-    proposed = R.default_action(ctx)
-    decision = R.evaluate(ctx, proposed)
-    delay = recommend_delay_minutes(ctx)
-    p = estimate_recovery_probability(ctx)
-    
-    # Map to demo response format
-    risk_score = int(p * 100)
-    risk_level = "HIGH" if risk_score >= 70 else "MEDIUM" if risk_score >= 40 else "LOW"
-    
-    # Determine customer type
-    customer_type = "Premium" if ctx.lifetime_payments >= 10 else "Returning" if ctx.lifetime_payments > 0 else "New"
-    
-    # Use expected value instead of random simulation
-    # If action is executable, show expected recovery based on probability
-    amount_paise = int(ctx.amount_inr * 100)
-    
-    if decision.is_executable:
-        # Show EXPECTED recovery (probability * amount)
-        recovered_amount = int(amount_paise * p)
-        status = "pending"  # Would be attempted
-    else:
-        # Action blocked - no recovery possible
-        recovered_amount = 0
-        status = "no_action"
-    
-    # Get enhanced explanation from Groq
-    from app.services.groq_service import get_enhanced_explanation
-    
-    payment_context = {
-        "amount_inr": ctx.amount_inr,
-        "failure_code": ctx.raw_failure_code,
-        "rail": ctx.rail.value,
-        "customer_type": customer_type,
-        "lifetime_payments": ctx.lifetime_payments,
-        "retry_count": ctx.retry_count,
-        "hours_since_failure": ctx.hours_since_failure
-    }
-    
-    decision_context = {
-        "action": decision.action.value,
-        "disposition": decision.disposition.value,
-        "rule_id": decision.rule_id,
-        "probability": p,
-        "is_executable": decision.is_executable
-    }
-    
-    # Base explanation with policy context
-    base_explanation = decision.reason
-    if not decision.is_executable:
-        # Add policy context for blocked actions
-        if decision.rule_id == "G06_RETRY_CAP_REACHED":
-            base_explanation += f" The system has already attempted recovery {ctx.retry_count} times, which exceeds our safety limit of 3 attempts to prevent customer harassment and scheme penalties."
-        elif decision.rule_id == "G08_ISSUER_DOWN_DEFER":
-            base_explanation += " Retrying during a known outage window wastes retry attempts. The system will automatically retry once the issuer is back online."
-        elif decision.rule_id == "G12_VALUE_CEILING_APPROVAL":
-            base_explanation += f" High-value payments (₹{ctx.amount_inr:,.0f}) require human review to prevent unauthorized large transactions."
-        elif decision.rule_id == "G04_HARD_DECLINE":
-            base_explanation += " Hard declines like expired cards cannot be fixed by retrying - the customer must update their payment method first."
-    
-    # Enhance with Groq
-    enhanced_explanation = await get_enhanced_explanation(
-        payment_context,
-        decision_context,
-        base_explanation
-    )
-    
-    demo_case = {
-        "payment_id": ctx.payment_id,
-        "amount": amount_paise,
-        "risk_score": risk_score,
-        "risk_level": risk_level,
-        "failure_reason": ctx.raw_failure_code or "Unknown failure",
-        "customer_type": customer_type,
-        "previous_attempts": ctx.retry_count,
-        "recovery_probability": p,
-        "recommended_action": decision.action.value.replace("_", " ").title(),
-        "reason": enhanced_explanation,  # Enhanced with Groq
-        "policy_reason": base_explanation,  # Original deterministic reason
-        "confidence": int(p * 100),
-        "status": status,
-        "recovered_amount": recovered_amount,
-        "disposition": decision.disposition.value,
-        "rule_id": decision.rule_id,
-        "delay_minutes": delay,
-        "expected_value": int(expected_value_inr(ctx, decision.action, p_recover=p) * 100),
-        "is_executable": decision.is_executable
-    }
-    
-    # Calculate metrics - use EXPECTED values, not random
-    if decision.is_executable:
-        at_risk = amount_paise - recovered_amount  # Remaining at risk
-        potential = recovered_amount  # Expected recovery
-        recovery_rate = p * 100  # Expected recovery rate
-    else:
-        at_risk = amount_paise  # All at risk if blocked
-        potential = 0
-        recovery_rate = 0
-    
-    return {
-        "case": demo_case,
-        "metrics": {
-            "transactions_analyzed": 1,
-            "revenue_analyzed": amount_paise,
-            "revenue_at_risk": at_risk,
-            "potential_recovery": potential,
-            "actions_recommended": 1 if decision.is_executable else 0,
-            "simulated_recovery": recovered_amount,  # Expected, not random
-            "recovery_rate": recovery_rate
+    try:
+        # Run actual agent analysis on user input
+        ctx = _to_context(event)
+        proposed = R.default_action(ctx)
+        decision = R.evaluate(ctx, proposed)
+        delay = recommend_delay_minutes(ctx)
+        
+        # Get REAL probability from scoring module (not fake)
+        p = estimate_recovery_probability(ctx)
+        
+        # Get detailed breakdown for transparency
+        breakdown = score_breakdown(ctx, decision.action)
+        
+        # Map to demo response format
+        risk_score = int(p * 100)
+        risk_level = "HIGH" if risk_score >= 70 else "MEDIUM" if risk_score >= 40 else "LOW"
+        
+        # Determine customer type
+        customer_type = "Premium" if ctx.lifetime_payments >= 10 else "Returning" if ctx.lifetime_payments > 0 else "New"
+        
+        # Use expected value instead of random simulation
+        # If action is executable, show expected recovery based on probability
+        amount_paise = int(ctx.amount_inr * 100)
+        
+        if decision.is_executable:
+            # Show EXPECTED recovery (probability * amount)
+            recovered_amount = int(amount_paise * p)
+            status = "pending"  # Would be attempted
+        else:
+            # Action blocked - no recovery possible
+            recovered_amount = 0
+            status = "no_action"
+        
+        # Get enhanced explanation from Groq
+        from app.services.groq_service import get_enhanced_explanation
+        
+        payment_context = {
+            "amount_inr": ctx.amount_inr,
+            "failure_code": ctx.raw_failure_code,
+            "rail": ctx.rail.value,
+            "customer_type": customer_type,
+            "lifetime_payments": ctx.lifetime_payments,
+            "retry_count": ctx.retry_count,
+            "hours_since_failure": ctx.hours_since_failure
         }
-    }
+        
+        decision_context = {
+            "action": decision.action.value,
+            "disposition": decision.disposition.value,
+            "rule_id": decision.rule_id,
+            "probability": p,
+            "is_executable": decision.is_executable
+        }
+        
+        # Base explanation with policy context
+        base_explanation = decision.reason
+        if not decision.is_executable:
+            # Add policy context for blocked actions
+            if decision.rule_id == "G06_RETRY_CAP_REACHED":
+                base_explanation += f" The system has already attempted recovery {ctx.retry_count} times, which exceeds our safety limit of 3 attempts to prevent customer harassment and scheme penalties."
+            elif decision.rule_id == "G08_ISSUER_DOWN_DEFER":
+                base_explanation += " Retrying during a known outage window wastes retry attempts. The system will automatically retry once the issuer is back online."
+            elif decision.rule_id == "G12_VALUE_CEILING_APPROVAL":
+                base_explanation += f" High-value payments (₹{ctx.amount_inr:,.0f}) require human review to prevent unauthorized large transactions."
+            elif decision.rule_id == "G04_HARD_FAILURE_NOT_RETRYABLE":
+                base_explanation += " Hard declines like expired cards cannot be fixed by retrying - the customer must update their payment method first."
+        
+        # Enhance with Groq (fallback to base if unavailable)
+        enhanced_explanation = await get_enhanced_explanation(
+            payment_context,
+            decision_context,
+            base_explanation
+        )
+        
+        demo_case = {
+            "payment_id": ctx.payment_id,
+            "amount": amount_paise,
+            "risk_score": risk_score,
+            "risk_level": risk_level,
+            "failure_reason": ctx.raw_failure_code or "Unknown failure",
+            "failure_class": ctx.failure_class.value,
+            "customer_type": customer_type,
+            "previous_attempts": ctx.retry_count,
+            "recovery_probability": round(p, 4),  # Real probability from scoring
+            "recommended_action": decision.action.value.replace("_", " ").title(),
+            "reason": enhanced_explanation,  # Enhanced with Groq
+            "policy_reason": base_explanation,  # Original deterministic reason
+            "confidence": int(p * 100),
+            "status": status,
+            "recovered_amount": recovered_amount,
+            "disposition": decision.disposition.value,
+            "rule_id": decision.rule_id,
+            "delay_minutes": delay,
+            "expected_value": int(expected_value_inr(ctx, decision.action, p_recover=p) * 100),
+            "is_executable": decision.is_executable,
+            # Add detailed breakdown for transparency
+            "breakdown": {
+                "base_probability": breakdown.get("base_probability", 0),
+                "rail_factor": breakdown.get("rail_factor", 1.0),
+                "timing_multiplier": breakdown.get("timing_multiplier", 1.0),
+                "retry_penalty": breakdown.get("retry_penalty", 1.0),
+                "days_until_payday": breakdown.get("days_until_payday", 0)
+            }
+        }
+        
+        # Calculate metrics - use EXPECTED values, not random
+        if decision.is_executable:
+            at_risk = amount_paise - recovered_amount  # Remaining at risk
+            potential = recovered_amount  # Expected recovery
+            recovery_rate = p * 100  # Expected recovery rate
+        else:
+            at_risk = amount_paise  # All at risk if blocked
+            potential = 0
+            recovery_rate = 0
+        
+        return {
+            "case": demo_case,
+            "metrics": {
+                "transactions_analyzed": 1,
+                "revenue_analyzed": amount_paise,
+                "revenue_at_risk": at_risk,
+                "potential_recovery": potential,
+                "actions_recommended": 1 if decision.is_executable else 0,
+                "simulated_recovery": recovered_amount,  # Expected, not random
+                "recovery_rate": recovery_rate
+            }
+        }
+    except Exception as e:
+        # Log error and return structured error response
+        print(f"❌ Error in custom_analysis: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # Return error with safe defaults
+        return {
+            "error": str(e),
+            "case": {
+                "payment_id": event.payment_id,
+                "amount": int(event.amount_inr * 100),
+                "risk_score": 0,
+                "risk_level": "LOW",
+                "failure_reason": event.failure_code or "Error processing",
+                "failure_class": "unknown",
+                "customer_type": "Unknown",
+                "previous_attempts": event.retry_count,
+                "recovery_probability": 0.0,
+                "recommended_action": "Error",
+                "reason": f"Error analyzing payment: {str(e)}",
+                "policy_reason": "Error occurred",
+                "confidence": 0,
+                "status": "no_action",
+                "recovered_amount": 0,
+                "disposition": "blocked",
+                "rule_id": "ERROR",
+                "delay_minutes": 0,
+                "expected_value": 0,
+                "is_executable": False
+            },
+            "metrics": {
+                "transactions_analyzed": 0,
+                "revenue_analyzed": 0,
+                "revenue_at_risk": 0,
+                "potential_recovery": 0,
+                "actions_recommended": 0,
+                "simulated_recovery": 0,
+                "recovery_rate": 0
+            }
+        }
 
 
 @app.post("/system/test-webhook")
