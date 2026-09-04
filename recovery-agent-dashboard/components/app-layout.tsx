@@ -20,6 +20,7 @@ const navigation = [
   { name: 'Recovery Actions', href: '/recovery-actions', icon: PlayCircle },
   { name: 'Insights & Analytics', href: '/insights', icon: TrendingUp },
   { name: 'System Health', href: '/system-health', icon: Stethoscope },
+  { name: '🧪 Demo Mode', href: '/demo', icon: Activity },
 ]
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

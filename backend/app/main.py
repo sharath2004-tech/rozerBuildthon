@@ -665,6 +665,390 @@ def seed_database_endpoint():
         }
 
 
+# ===== Demo Mode Endpoints =====
+
+class DemoScenarioRequest(BaseModel):
+    """Request for demo scenario simulation."""
+    scenario: str = Field(..., description="Scenario ID to simulate")
+
+
+@app.post("/demo/simulate")
+def simulate_scenario(request: DemoScenarioRequest) -> dict:
+    """
+    Simulate a specific recovery scenario.
+    
+    This endpoint runs the actual recovery agent logic on demo payment events
+    to demonstrate how the system analyzes and handles different types of
+    payment failures.
+    
+    **Safe**: Demo mode does not affect real payments or send real communications.
+    """
+    import random
+    
+    # Scenario templates
+    scenarios = {
+        "payment_failure": {
+            "payment_id": "pay_demo_001",
+            "customer_id": "cust_demo_001",
+            "amount_inr": 25000.0,
+            "rail": Rail.UPI,
+            "failure_code": "INSUFFICIENT_FUNDS",
+            "retry_count": 1,
+            "hours_since_failure": 2.0,
+            "prior_actions_24h": 0,
+            "lifetime_payments": 5,
+            "lifetime_recoveries": 4,
+            "has_messaging_consent": True,
+            "is_dnd_registered": False,
+            "already_recovered": False,
+            "action_in_flight": False,
+            "idempotency_key": "demo_idempotency_001"
+        },
+        "checkout_abandonment": {
+            "payment_id": "pay_demo_002",
+            "customer_id": "cust_demo_002",
+            "amount_inr": 12000.0,
+            "rail": Rail.CARD,
+            "failure_code": "CHECKOUT_ABANDONED",
+            "retry_count": 0,
+            "hours_since_failure": 1.0,
+            "prior_actions_24h": 0,
+            "lifetime_payments": 3,
+            "lifetime_recoveries": 3,
+            "has_messaging_consent": True,
+            "is_dnd_registered": False,
+            "already_recovered": False,
+            "action_in_flight": False,
+            "idempotency_key": "demo_idempotency_002"
+        },
+        "repeated_failure": {
+            "payment_id": "pay_demo_003",
+            "customer_id": "cust_demo_003",
+            "amount_inr": 8000.0,
+            "rail": Rail.CARD,
+            "failure_code": "CARD_DECLINED",
+            "retry_count": 4,
+            "hours_since_failure": 12.0,
+            "prior_actions_24h": 3,
+            "lifetime_payments": 2,
+            "lifetime_recoveries": 1,
+            "has_messaging_consent": True,
+            "is_dnd_registered": False,
+            "already_recovered": False,
+            "action_in_flight": False,
+            "idempotency_key": "demo_idempotency_003"
+        },
+        "high_value": {
+            "payment_id": "pay_demo_004",
+            "customer_id": "cust_demo_004",
+            "amount_inr": 50000.0,
+            "rail": Rail.NETBANKING,
+            "failure_code": "NETWORK_ERROR",
+            "retry_count": 1,
+            "hours_since_failure": 0.5,
+            "prior_actions_24h": 0,
+            "lifetime_payments": 10,
+            "lifetime_recoveries": 9,
+            "has_messaging_consent": True,
+            "is_dnd_registered": False,
+            "already_recovered": False,
+            "action_in_flight": False,
+            "idempotency_key": "demo_idempotency_004"
+        },
+        "low_priority": {
+            "payment_id": "pay_demo_005",
+            "customer_id": "cust_demo_005",
+            "amount_inr": 199.0,
+            "rail": Rail.WALLET,
+            "failure_code": "PAYMENT_TIMEOUT",
+            "retry_count": 1,
+            "hours_since_failure": 24.0,
+            "prior_actions_24h": 0,
+            "lifetime_payments": 0,
+            "lifetime_recoveries": 0,
+            "has_messaging_consent": False,
+            "is_dnd_registered": False,
+            "already_recovered": False,
+            "action_in_flight": False,
+            "idempotency_key": "demo_idempotency_005"
+        },
+        "already_recovered": {
+            "payment_id": "pay_demo_006",
+            "customer_id": "cust_demo_006",
+            "amount_inr": 15000.0,
+            "rail": Rail.UPI,
+            "failure_code": None,
+            "retry_count": 0,
+            "hours_since_failure": 0.0,
+            "prior_actions_24h": 0,
+            "lifetime_payments": 5,
+            "lifetime_recoveries": 5,
+            "has_messaging_consent": True,
+            "is_dnd_registered": False,
+            "already_recovered": True,
+            "action_in_flight": False,
+            "idempotency_key": "demo_idempotency_006"
+        }
+    }
+    
+    # Get scenario template
+    scenario_data = scenarios.get(request.scenario, scenarios["payment_failure"])
+    
+    # Create payment event
+    event = PaymentEvent(**scenario_data)
+    
+    # Run actual agent analysis
+    ctx = _to_context(event)
+    proposed = R.default_action(ctx)
+    decision = R.evaluate(ctx, proposed)
+    delay = recommend_delay_minutes(ctx)
+    p = estimate_recovery_probability(ctx)
+    
+    # Map to demo response format
+    risk_score = int(p * 100)
+    risk_level = "HIGH" if risk_score >= 70 else "MEDIUM" if risk_score >= 40 else "LOW"
+    
+    # Determine customer type
+    customer_type = "Premium" if ctx.lifetime_payments >= 10 else "Returning" if ctx.lifetime_payments > 0 else "New"
+    
+    # Simulate recovery outcome
+    recovered = decision.is_executable and random.random() < p
+    
+    demo_case = {
+        "payment_id": ctx.payment_id,
+        "amount": int(ctx.amount_inr * 100),  # Convert to paise
+        "risk_score": risk_score,
+        "risk_level": risk_level,
+        "failure_reason": ctx.raw_failure_code or "Unknown failure",
+        "customer_type": customer_type,
+        "previous_attempts": ctx.retry_count,
+        "recovery_probability": p,
+        "recommended_action": decision.action.value.replace("_", " ").title(),
+        "reason": decision.reason,
+        "confidence": int(p * 100),
+        "status": "recovered" if recovered else "no_action" if not decision.is_executable else "pending",
+        "recovered_amount": int(ctx.amount_inr * 100) if recovered else 0
+    }
+    
+    # Calculate metrics
+    total_amount = int(ctx.amount_inr * 100)
+    recovered_amount = demo_case["recovered_amount"]
+    
+    return {
+        "cases": [demo_case],
+        "metrics": {
+            "transactions_analyzed": 1,
+            "revenue_analyzed": total_amount,
+            "revenue_at_risk": total_amount - recovered_amount,
+            "potential_recovery": int(total_amount * p),
+            "actions_recommended": 1 if decision.is_executable else 0,
+            "simulated_recovery": recovered_amount,
+            "recovery_rate": (recovered_amount / total_amount * 100) if total_amount > 0 else 0
+        }
+    }
+
+
+@app.post("/demo/full-simulation")
+def full_simulation() -> dict:
+    """
+    Run a full recovery simulation with multiple payment events.
+    
+    Generates a realistic set of payment failures and runs them through
+    the complete recovery pipeline to demonstrate end-to-end functionality.
+    
+    **Safe**: All data is simulated and no real actions are taken.
+    """
+    import random
+    
+    # Generate diverse test cases
+    test_cases = [
+        {
+            "payment_id": "pay_demo_101",
+            "customer_id": "cust_demo_101",
+            "amount_inr": 25000.0,
+            "rail": Rail.UPI,
+            "failure_code": "INSUFFICIENT_FUNDS",
+            "retry_count": 1,
+            "hours_since_failure": 2.0,
+            "lifetime_payments": 6,
+            "lifetime_recoveries": 5,
+            "has_messaging_consent": True,
+            "recovery_sim": 0.82
+        },
+        {
+            "payment_id": "pay_demo_102",
+            "customer_id": "cust_demo_102",
+            "amount_inr": 12000.0,
+            "rail": Rail.CARD,
+            "failure_code": "CHECKOUT_ABANDONED",
+            "retry_count": 0,
+            "hours_since_failure": 1.0,
+            "lifetime_payments": 4,
+            "lifetime_recoveries": 4,
+            "has_messaging_consent": True,
+            "recovery_sim": 0.75
+        },
+        {
+            "payment_id": "pay_demo_103",
+            "customer_id": "cust_demo_103",
+            "amount_inr": 8000.0,
+            "rail": Rail.CARD,
+            "failure_code": "CARD_DECLINED",
+            "retry_count": 3,
+            "hours_since_failure": 24.0,
+            "lifetime_payments": 2,
+            "lifetime_recoveries": 1,
+            "has_messaging_consent": True,
+            "recovery_sim": 0.35
+        },
+        {
+            "payment_id": "pay_demo_104",
+            "customer_id": "cust_demo_104",
+            "amount_inr": 50000.0,
+            "rail": Rail.NETBANKING,
+            "failure_code": "NETWORK_ERROR",
+            "retry_count": 1,
+            "hours_since_failure": 0.5,
+            "lifetime_payments": 12,
+            "lifetime_recoveries": 11,
+            "has_messaging_consent": True,
+            "recovery_sim": 0.92
+        },
+        {
+            "payment_id": "pay_demo_105",
+            "customer_id": "cust_demo_105",
+            "amount_inr": 4500.0,
+            "rail": Rail.UPI,
+            "failure_code": "BANK_OFFLINE",
+            "retry_count": 2,
+            "hours_since_failure": 6.0,
+            "lifetime_payments": 1,
+            "lifetime_recoveries": 0,
+            "has_messaging_consent": True,
+            "recovery_sim": 0.38
+        },
+        {
+            "payment_id": "pay_demo_106",
+            "customer_id": "cust_demo_106",
+            "amount_inr": 199.0,
+            "rail": Rail.WALLET,
+            "failure_code": "PAYMENT_TIMEOUT",
+            "retry_count": 1,
+            "hours_since_failure": 48.0,
+            "lifetime_payments": 0,
+            "lifetime_recoveries": 0,
+            "has_messaging_consent": False,
+            "recovery_sim": 0.15
+        },
+        {
+            "payment_id": "pay_demo_107",
+            "customer_id": "cust_demo_107",
+            "amount_inr": 15000.0,
+            "rail": Rail.UPI,
+            "failure_code": None,
+            "retry_count": 0,
+            "hours_since_failure": 0.0,
+            "lifetime_payments": 8,
+            "lifetime_recoveries": 8,
+            "has_messaging_consent": True,
+            "already_recovered": True,
+            "recovery_sim": 1.0
+        },
+        {
+            "payment_id": "pay_demo_108",
+            "customer_id": "cust_demo_108",
+            "amount_inr": 32000.0,
+            "rail": Rail.CARD,
+            "failure_code": "BANK_DECLINED",
+            "retry_count": 1,
+            "hours_since_failure": 3.0,
+            "lifetime_payments": 7,
+            "lifetime_recoveries": 6,
+            "has_messaging_consent": True,
+            "recovery_sim": 0.73
+        }
+    ]
+    
+    demo_cases = []
+    total_revenue = 0
+    total_recovered = 0
+    total_at_risk = 0
+    actions_count = 0
+    
+    for test_data in test_cases:
+        recovery_sim = test_data.pop("recovery_sim", 0.5)
+        already_recovered = test_data.pop("already_recovered", False)
+        
+        # Create payment event
+        event = PaymentEvent(
+            **test_data,
+            prior_actions_24h=0,
+            is_dnd_registered=False,
+            already_recovered=already_recovered,
+            action_in_flight=False,
+            idempotency_key=f"demo_{test_data['payment_id']}"
+        )
+        
+        # Run agent analysis
+        ctx = _to_context(event)
+        proposed = R.default_action(ctx)
+        decision = R.evaluate(ctx, proposed)
+        p = estimate_recovery_probability(ctx)
+        
+        # Map results
+        risk_score = int(p * 100)
+        risk_level = "HIGH" if risk_score >= 70 else "MEDIUM" if risk_score >= 40 else "LOW"
+        customer_type = "Premium" if ctx.lifetime_payments >= 10 else "Returning" if ctx.lifetime_payments > 0 else "New"
+        
+        # Simulate recovery
+        recovered = decision.is_executable and recovery_sim > 0.5
+        amount_paise = int(ctx.amount_inr * 100)
+        recovered_amount = amount_paise if recovered else 0
+        
+        demo_case = {
+            "payment_id": ctx.payment_id,
+            "amount": amount_paise,
+            "risk_score": risk_score,
+            "risk_level": risk_level,
+            "failure_reason": ctx.raw_failure_code or ("Already recovered" if already_recovered else "Unknown"),
+            "customer_type": customer_type,
+            "previous_attempts": ctx.retry_count,
+            "recovery_probability": p,
+            "recommended_action": decision.action.value.replace("_", " ").title(),
+            "reason": decision.reason,
+            "confidence": int(p * 100),
+            "status": "recovered" if recovered else "no_action" if not decision.is_executable else "pending",
+            "recovered_amount": recovered_amount
+        }
+        
+        demo_cases.append(demo_case)
+        total_revenue += amount_paise
+        total_recovered += recovered_amount
+        
+        if demo_case["status"] in ["pending", "simulated"]:
+            total_at_risk += amount_paise
+        
+        if decision.is_executable:
+            actions_count += 1
+    
+    # Calculate aggregate metrics
+    recovery_rate = (total_recovered / total_revenue * 100) if total_revenue > 0 else 0
+    potential_recovery = int(total_at_risk * 0.68)
+    
+    return {
+        "cases": demo_cases,
+        "metrics": {
+            "transactions_analyzed": len(demo_cases),
+            "revenue_analyzed": total_revenue,
+            "revenue_at_risk": total_at_risk,
+            "potential_recovery": potential_recovery,
+            "actions_recommended": actions_count,
+            "simulated_recovery": total_recovered,
+            "recovery_rate": recovery_rate
+        }
+    }
+
+
 @app.post("/system/test-webhook")
 def test_webhook_endpoint(data: dict):
     """
