@@ -208,7 +208,7 @@ export default function DemoMode() {
           payment_id: `pay_custom_${Date.now()}`,
           customer_id: `cust_custom_${Date.now()}`,
           amount_inr: customInput.amount,
-          rail: 'UPI',
+          rail: 'upi',  // lowercase enum value
           failure_code: customInput.failure_code,
           retry_count: customInput.retry_count,
           hours_since_failure: customInput.hours_since_failure,
