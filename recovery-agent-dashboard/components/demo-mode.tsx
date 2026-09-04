@@ -125,7 +125,7 @@ export default function DemoMode() {
   const [showCustomForm, setShowCustomForm] = useState(false)
   const [customInput, setCustomInput] = useState({
     amount: 25000,
-    failure_code: 'INSUFFICIENT_FUNDS',
+    failure_code: 'insufficient_funds',  // Use taxonomy code
     retry_count: 1,
     customer_type: 'returning',
     hours_since_failure: 2
@@ -759,13 +759,15 @@ export default function DemoMode() {
                   onChange={(e) => setCustomInput({...customInput, failure_code: e.target.value})}
                   className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                 >
-                  <option value="INSUFFICIENT_FUNDS">Insufficient Funds</option>
-                  <option value="CARD_DECLINED">Card Declined</option>
-                  <option value="NETWORK_ERROR">Network Error</option>
-                  <option value="BANK_OFFLINE">Bank Offline</option>
-                  <option value="AUTHENTICATION_FAILED">Authentication Failed</option>
-                  <option value="CHECKOUT_ABANDONED">Checkout Abandoned</option>
-                  <option value="PAYMENT_TIMEOUT">Payment Timeout</option>
+                  <option value="insufficient_funds">Insufficient Funds (Soft Decline)</option>
+                  <option value="card_expired">Card Expired (Hard Decline)</option>
+                  <option value="network_error">Network Error (Technical)</option>
+                  <option value="bank_timeout">Bank Timeout (Technical)</option>
+                  <option value="payment_timed_out">Payment Timed Out (Technical)</option>
+                  <option value="authentication_abandoned">Authentication Abandoned</option>
+                  <option value="otp_not_entered">OTP Not Entered (Abandoned)</option>
+                  <option value="issuer_down">Issuer/Bank Down</option>
+                  <option value="limit_exceeded">Limit Exceeded (Soft Decline)</option>
                 </select>
               </div>
 
