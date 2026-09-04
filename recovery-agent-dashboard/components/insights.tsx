@@ -284,13 +284,14 @@ export default function Insights() {
           position: 'fixed',
           bottom: '2rem',
           right: '2rem',
-          background: 'var(--success)',
-          color: 'white',
+          background: '#10b981',
+          color: '#ffffff',
           padding: '1rem 1.5rem',
           borderRadius: '8px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
           zIndex: 1000,
-          animation: 'slideIn 0.3s ease'
+          fontWeight: '600',
+          fontSize: '0.95rem'
         }}>
           {toast}
         </div>

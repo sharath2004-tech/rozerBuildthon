@@ -368,8 +368,23 @@ export default function RealDataDashboard() {
           </section>
 
           {notice && (
-            <div className="toast">
-              <Check /> {notice}
+            <div style={{
+              position: 'fixed',
+              bottom: '2rem',
+              right: '2rem',
+              background: '#10b981',
+              color: '#ffffff',
+              padding: '1rem 1.5rem',
+              borderRadius: '8px',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+              zIndex: 1000,
+              fontWeight: '600',
+              fontSize: '0.95rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}>
+              <Check size={18} /> {notice}
             </div>
           )}
         </div>

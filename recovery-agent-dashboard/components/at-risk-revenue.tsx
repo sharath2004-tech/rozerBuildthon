@@ -362,12 +362,14 @@ export default function AtRiskRevenue() {
           position: 'fixed',
           bottom: '2rem',
           right: '2rem',
-          background: toast.startsWith('✓') ? 'var(--success)' : 'var(--error)',
-          color: 'white',
+          background: toast.startsWith('✓') ? '#10b981' : '#ef4444',
+          color: '#ffffff',
           padding: '1rem 1.5rem',
           borderRadius: '8px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-          zIndex: 1000
+          boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+          zIndex: 1000,
+          fontWeight: '600',
+          fontSize: '0.95rem'
         }}>
           {toast}
         </div>
