@@ -37,8 +37,10 @@ export default function PaymentDetailPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    loadPaymentData()
-  }, [params.id])
+    if (params?.id) {
+      loadPaymentData()
+    }
+  }, [params?.id])
 
   const loadPaymentData = async () => {
     setLoading(true)
@@ -48,7 +50,7 @@ export default function PaymentDetailPage() {
       
       // Mock data matching the screenshot
       setPayment({
-        payment_id: `pay_${params.id}`,
+        payment_id: `pay_${params?.id || 'unknown'}`,
         order_id: `order_${Math.floor(Math.random() * 1000)}`,
         customer_id: 'cust_Qmuy4q',
         amount_inr: 15128,
