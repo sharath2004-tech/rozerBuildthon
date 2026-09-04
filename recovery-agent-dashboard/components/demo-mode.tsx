@@ -124,11 +124,11 @@ export default function DemoMode() {
   // Custom input state
   const [showCustomForm, setShowCustomForm] = useState(false)
   const [customInput, setCustomInput] = useState({
-    amount: 50000,  // Higher default amount for better demo
-    failure_code: 'insufficient_funds',  // Use taxonomy code
-    retry_count: 1,  // Within retry cap
-    customer_type: 'returning',
-    hours_since_failure: 2
+    amount: 0,  // Empty - user must enter
+    failure_code: '',  // Empty - user must select
+    retry_count: 0,
+    customer_type: 'new',  // Start with new customer
+    hours_since_failure: 0
   })
 
   const showToast = (message: string) => {
@@ -759,6 +759,7 @@ export default function DemoMode() {
                   onChange={(e) => setCustomInput({...customInput, failure_code: e.target.value})}
                   className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                 >
+                  <option value="" disabled>-- Select a failure reason --</option>
                   <optgroup label="✅ Retryable (Will Auto-Retry)">
                     <option value="insufficient_funds">Insufficient Funds</option>
                     <option value="limit_exceeded">Limit Exceeded</option>

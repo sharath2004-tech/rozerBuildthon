@@ -1060,8 +1060,6 @@ def custom_analysis(event: PaymentEvent) -> dict:
     
     **Safe**: Demo mode - no real actions taken, no database writes.
     """
-    import random
-    
     # Run actual agent analysis on user input
     ctx = _to_context(event)
     proposed = R.default_action(ctx)
@@ -1076,10 +1074,31 @@ def custom_analysis(event: PaymentEvent) -> dict:
     # Determine customer type
     customer_type = "Premium" if ctx.lifetime_payments >= 10 else "Returning" if ctx.lifetime_payments > 0 else "New"
     
-    # Simulate recovery outcome based on actual probability
-    recovered = decision.is_executable and random.random() < p
+    # Use expected value instead of random simulation
+    # If action is executable, show expected recovery based on probability
     amount_paise = int(ctx.amount_inr * 100)
-    recovered_amount = amount_paise if recovered else 0
+    
+    if decision.is_executable:
+        # Show EXPECTED recovery (probability * amount)
+        recovered_amount = int(amount_paise * p)
+        status = "pending"  # Would be attempted
+    else:
+        # Action blocked - no recovery possible
+        recovered_amount = 0
+        status = "no_action"
+    
+    # Generate LLM explanation if blocked
+    explanation = decision.reason
+    if not decision.is_executable:
+        # Add more context about WHY it was blocked
+        if decision.rule_id == "G06_RETRY_CAP_REACHED":
+            explanation += f" The system has already attempted recovery {ctx.retry_count} times, which exceeds our safety limit of 3 attempts to prevent customer harassment and scheme penalties."
+        elif decision.rule_id == "G08_ISSUER_DOWN_DEFER":
+            explanation += " Retrying during a known outage window wastes retry attempts. The system will automatically retry once the issuer is back online."
+        elif decision.rule_id == "G12_VALUE_CEILING_APPROVAL":
+            explanation += f" High-value payments (₹{ctx.amount_inr:,.0f}) require human review to prevent unauthorized large transactions."
+        elif decision.rule_id == "G04_HARD_DECLINE":
+            explanation += " Hard declines like expired cards cannot be fixed by retrying - the customer must update their payment method first."
     
     demo_case = {
         "payment_id": ctx.payment_id,
@@ -1091,20 +1110,26 @@ def custom_analysis(event: PaymentEvent) -> dict:
         "previous_attempts": ctx.retry_count,
         "recovery_probability": p,
         "recommended_action": decision.action.value.replace("_", " ").title(),
-        "reason": decision.reason,  # This shows WHY it was blocked!
+        "reason": explanation,  # Enhanced explanation
         "confidence": int(p * 100),
-        "status": "recovered" if recovered else "no_action" if not decision.is_executable else "pending",
+        "status": status,
         "recovered_amount": recovered_amount,
         "disposition": decision.disposition.value,
-        "rule_id": decision.rule_id,  # Which rule blocked it
+        "rule_id": decision.rule_id,
         "delay_minutes": delay,
         "expected_value": int(expected_value_inr(ctx, decision.action, p_recover=p) * 100),
-        "is_executable": decision.is_executable  # Debug: is it allowed?
+        "is_executable": decision.is_executable
     }
     
-    # Calculate metrics for single case
-    at_risk = 0 if recovered or not decision.is_executable else amount_paise
-    potential = int(amount_paise * p) if decision.is_executable else 0
+    # Calculate metrics - use EXPECTED values, not random
+    if decision.is_executable:
+        at_risk = amount_paise - recovered_amount  # Remaining at risk
+        potential = recovered_amount  # Expected recovery
+        recovery_rate = p * 100  # Expected recovery rate
+    else:
+        at_risk = amount_paise  # All at risk if blocked
+        potential = 0
+        recovery_rate = 0
     
     return {
         "case": demo_case,
@@ -1114,8 +1139,8 @@ def custom_analysis(event: PaymentEvent) -> dict:
             "revenue_at_risk": at_risk,
             "potential_recovery": potential,
             "actions_recommended": 1 if decision.is_executable else 0,
-            "simulated_recovery": recovered_amount,
-            "recovery_rate": (recovered_amount / amount_paise * 100) if amount_paise > 0 else 0
+            "simulated_recovery": recovered_amount,  # Expected, not random
+            "recovery_rate": recovery_rate
         }
     }
 
