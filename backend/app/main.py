@@ -592,6 +592,37 @@ async def system_health_check():
     return health_results
 
 
+@app.post("/system/seed-data")
+def seed_database_endpoint():
+    """
+    Seed the database with test data.
+    
+    This endpoint populates the database with realistic test data
+    for development and demo purposes.
+    
+    **Warning**: This will add data to your database!
+    """
+    from app.seed_data import main as seed_main
+    
+    try:
+        seed_main()
+        return {
+            "success": True,
+            "message": "Database seeded successfully with test data",
+            "tables_seeded": [
+                "recovery_workflows",
+                "batch_results",
+                "compliance_stats",
+                "payment_logs"
+            ]
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Error seeding database: {str(e)}"
+        }
+
+
 @app.post("/system/test-webhook")
 def test_webhook_endpoint(data: dict):
     """
