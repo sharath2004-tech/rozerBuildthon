@@ -1049,6 +1049,76 @@ def full_simulation() -> dict:
     }
 
 
+@app.post("/demo/custom-analysis")
+def custom_analysis(event: PaymentEvent) -> dict:
+    """
+    Analyze a custom payment event provided by the user.
+    
+    This endpoint accepts user-provided payment details and runs them through
+    the complete agent pipeline to demonstrate how the system would handle
+    the specific scenario.
+    
+    **Safe**: Demo mode - no real actions taken, no database writes.
+    """
+    import random
+    
+    # Run actual agent analysis on user input
+    ctx = _to_context(event)
+    proposed = R.default_action(ctx)
+    decision = R.evaluate(ctx, proposed)
+    delay = recommend_delay_minutes(ctx)
+    p = estimate_recovery_probability(ctx)
+    
+    # Map to demo response format
+    risk_score = int(p * 100)
+    risk_level = "HIGH" if risk_score >= 70 else "MEDIUM" if risk_score >= 40 else "LOW"
+    
+    # Determine customer type
+    customer_type = "Premium" if ctx.lifetime_payments >= 10 else "Returning" if ctx.lifetime_payments > 0 else "New"
+    
+    # Simulate recovery outcome based on actual probability
+    recovered = decision.is_executable and random.random() < p
+    amount_paise = int(ctx.amount_inr * 100)
+    recovered_amount = amount_paise if recovered else 0
+    
+    demo_case = {
+        "payment_id": ctx.payment_id,
+        "amount": amount_paise,
+        "risk_score": risk_score,
+        "risk_level": risk_level,
+        "failure_reason": ctx.raw_failure_code or "Unknown failure",
+        "customer_type": customer_type,
+        "previous_attempts": ctx.retry_count,
+        "recovery_probability": p,
+        "recommended_action": decision.action.value.replace("_", " ").title(),
+        "reason": decision.reason,
+        "confidence": int(p * 100),
+        "status": "recovered" if recovered else "no_action" if not decision.is_executable else "pending",
+        "recovered_amount": recovered_amount,
+        "disposition": decision.disposition.value,
+        "rule_id": decision.rule_id,
+        "delay_minutes": delay,
+        "expected_value": int(expected_value_inr(ctx, decision.action, p_recover=p) * 100)
+    }
+    
+    # Calculate metrics for single case
+    at_risk = 0 if recovered or not decision.is_executable else amount_paise
+    potential = int(amount_paise * p) if decision.is_executable else 0
+    
+    return {
+        "case": demo_case,
+        "metrics": {
+            "transactions_analyzed": 1,
+            "revenue_analyzed": amount_paise,
+            "revenue_at_risk": at_risk,
+            "potential_recovery": potential,
+            "actions_recommended": 1 if decision.is_executable else 0,
+            "simulated_recovery": recovered_amount,
+            "recovery_rate": (recovered_amount / amount_paise * 100) if amount_paise > 0 else 0
+        }
+    }
+
+
 @app.post("/system/test-webhook")
 def test_webhook_endpoint(data: dict):
     """

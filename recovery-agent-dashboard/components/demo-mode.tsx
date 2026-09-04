@@ -121,6 +121,16 @@ export default function DemoMode() {
   const [currentStage, setCurrentStage] = useState(0)
   const [toast, setToast] = useState('')
 
+  // Custom input state
+  const [showCustomForm, setShowCustomForm] = useState(false)
+  const [customInput, setCustomInput] = useState({
+    amount: 25000,
+    failure_code: 'INSUFFICIENT_FUNDS',
+    retry_count: 1,
+    customer_type: 'returning',
+    hours_since_failure: 2
+  })
+
   const showToast = (message: string) => {
     setToast(message)
     setTimeout(() => setToast(''), 3000)
@@ -163,6 +173,66 @@ export default function DemoMode() {
       setCases(localData.cases)
       setMetrics(localData.metrics)
       showToast(`✓ ${localData.cases.length} recovery cases simulated (local)`)
+    } finally {
+      setLoading(false)
+      setTimeout(() => setPipelineActive(false), 1000)
+    }
+  }
+
+  const runCustomAnalysis = async () => {
+    setLoading(true)
+    setPipelineActive(true)
+    setCurrentStage(0)
+
+    try {
+      // Animate through pipeline stages
+      for (let i = 0; i < pipelineStages.length; i++) {
+        setCurrentStage(i)
+        await new Promise(resolve => setTimeout(resolve, 600))
+      }
+
+      // Map customer type to lifetime payments
+      const lifetimeMap: Record<string, any> = {
+        'new': { lifetime_payments: 0, lifetime_recoveries: 0 },
+        'returning': { lifetime_payments: 5, lifetime_recoveries: 4 },
+        'premium': { lifetime_payments: 12, lifetime_recoveries: 11 }
+      }
+      
+      const customerData = lifetimeMap[customInput.customer_type] || lifetimeMap.returning
+
+      // Call backend with custom values
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/demo/custom-analysis`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payment_id: `pay_custom_${Date.now()}`,
+          customer_id: `cust_custom_${Date.now()}`,
+          amount_inr: customInput.amount,
+          rail: 'UPI',
+          failure_code: customInput.failure_code,
+          retry_count: customInput.retry_count,
+          hours_since_failure: customInput.hours_since_failure,
+          prior_actions_24h: 0,
+          ...customerData,
+          has_messaging_consent: true,
+          is_dnd_registered: false,
+          already_recovered: false,
+          action_in_flight: false,
+          idempotency_key: `custom_${Date.now()}`
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setCases([data.case])
+        setMetrics(data.metrics)
+        setShowCustomForm(false)
+        showToast(`✓ Custom analysis complete - ${data.case.recommended_action}`)
+      } else {
+        showToast('❌ Backend unavailable - try preset scenarios')
+      }
+    } catch (error) {
+      showToast('❌ Error analyzing custom input')
     } finally {
       setLoading(false)
       setTimeout(() => setPipelineActive(false), 1000)
@@ -633,6 +703,140 @@ export default function DemoMode() {
             )}
           </button>
         </div>
+      </div>
+
+      {/* Custom Analysis Form */}
+      <div className="bg-gradient-to-br from-green-50 to-teal-50 p-6 rounded-lg border-2 border-green-200 shadow-sm mb-8">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">💡 Custom Payment Analysis</h3>
+            <p className="text-gray-600">
+              Enter your own payment details and let the AI agent evaluate recovery probability and recommend actions in real-time.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowCustomForm(!showCustomForm)}
+            className="ml-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
+          >
+            {showCustomForm ? 'Hide Form' : 'Analyze Custom Payment'}
+          </button>
+        </div>
+
+        {showCustomForm && (
+          <div className="bg-white p-6 rounded-lg border mt-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Amount Input */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Payment Amount (₹)
+                </label>
+                <input
+                  type="number"
+                  value={customInput.amount}
+                  onChange={(e) => setCustomInput({...customInput, amount: parseFloat(e.target.value) || 0})}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  placeholder="25000"
+                  min="0"
+                />
+                <p className="text-xs text-gray-500 mt-1">Enter amount in rupees (e.g., 25000 for ₹25,000)</p>
+              </div>
+
+              {/* Failure Code */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Failure Reason
+                </label>
+                <select
+                  value={customInput.failure_code}
+                  onChange={(e) => setCustomInput({...customInput, failure_code: e.target.value})}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                >
+                  <option value="INSUFFICIENT_FUNDS">Insufficient Funds</option>
+                  <option value="CARD_DECLINED">Card Declined</option>
+                  <option value="NETWORK_ERROR">Network Error</option>
+                  <option value="BANK_OFFLINE">Bank Offline</option>
+                  <option value="AUTHENTICATION_FAILED">Authentication Failed</option>
+                  <option value="CHECKOUT_ABANDONED">Checkout Abandoned</option>
+                  <option value="PAYMENT_TIMEOUT">Payment Timeout</option>
+                </select>
+              </div>
+
+              {/* Customer Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Customer Type
+                </label>
+                <select
+                  value={customInput.customer_type}
+                  onChange={(e) => setCustomInput({...customInput, customer_type: e.target.value})}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                >
+                  <option value="new">New Customer (0 previous payments)</option>
+                  <option value="returning">Returning Customer (5 payments, 4 successful)</option>
+                  <option value="premium">Premium Customer (12 payments, 11 successful)</option>
+                </select>
+              </div>
+
+              {/* Retry Count */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Previous Retry Attempts
+                </label>
+                <input
+                  type="number"
+                  value={customInput.retry_count}
+                  onChange={(e) => setCustomInput({...customInput, retry_count: parseInt(e.target.value) || 0})}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  placeholder="1"
+                  min="0"
+                  max="5"
+                />
+                <p className="text-xs text-gray-500 mt-1">How many times has recovery been attempted? (0-5)</p>
+              </div>
+
+              {/* Hours Since Failure */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Time Since Failure (hours)
+                </label>
+                <input
+                  type="number"
+                  value={customInput.hours_since_failure}
+                  onChange={(e) => setCustomInput({...customInput, hours_since_failure: parseFloat(e.target.value) || 0})}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  placeholder="2"
+                  min="0"
+                  step="0.5"
+                />
+                <p className="text-xs text-gray-500 mt-1">How long ago did the payment fail? (e.g., 2.5)</p>
+              </div>
+            </div>
+
+            {/* Analyze Button */}
+            <div className="mt-6 flex items-center justify-between">
+              <p className="text-sm text-gray-600">
+                The agent will analyze your input using real recovery rules, scoring algorithms, and policy gates.
+              </p>
+              <button
+                onClick={runCustomAnalysis}
+                disabled={loading}
+                className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+              >
+                {loading ? (
+                  <>
+                    <Loader className="animate-spin" size={20} />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <TrendingUp size={20} />
+                    Analyze Payment
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Scenario Cards */}
